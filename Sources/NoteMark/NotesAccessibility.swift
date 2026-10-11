@@ -9,6 +9,7 @@ struct EditorSnapshot {
     let windowStart: Int
     let before: String
     let after: String
+    let rightBoundaryKnown: Bool
     let baseAttributes: [NSAttributedString.Key: Any]?
     let isMonospaced: Bool
 }
@@ -88,19 +89,36 @@ enum NotesAccessibility {
         guard let before = text(editor, range: NSRange(location: start, length: selection.location - start)) else { return nil }
         let count = (value(editor, kAXNumberOfCharactersAttribute) as? NSNumber)?.intValue
         let after: String
+        let rightBoundaryKnown: Bool
         if let count, selection.location < count {
-            guard let next = text(editor, range: NSRange(location: selection.location, length: 1)) else { return nil }
-            after = next
-        } else if count == selection.location { after = "" }
+            let beforeText = before as NSString
+            let newline = beforeText.rangeOfCharacter(from: .newlines, options: .backwards)
+            let line = beforeText.substring(from: newline.location == NSNotFound ? 0 : NSMaxRange(newline))
+            if ["-", "*"].contains(line) {
+                // Inspect the rest of this paragraph before changing an existing line to a list.
+                // A truncated tail or an image anchor must not be treated as plain text.
+                let length = min(512, count - selection.location)
+                guard let sample = text(editor, range: NSRange(location: selection.location, length: length)) else { return nil }
+                let tail = sample as NSString
+                let end = tail.rangeOfCharacter(from: .newlines)
+                after = end.location == NSNotFound ? sample : tail.substring(to: end.location)
+                rightBoundaryKnown = end.location != NSNotFound || length == count - selection.location
+            } else {
+                guard let next = text(editor, range: NSRange(location: selection.location, length: 1)) else { return nil }
+                after = next
+                rightBoundaryKnown = true
+            }
+        } else if count == selection.location { after = ""; rightBoundaryKnown = true }
         else {
             // Without a right-hand boundary, paragraph conversion is unsafe.
             after = "?"
+            rightBoundaryKnown = false
         }
         let attributes = selection.location > 0 ? attributes(editor, at: selection.location - 1) : nil
         let font = attributes?[.font] as? NSFont
         let mono = font.map { NSFontManager.shared.traits(of: $0).contains(.fixedPitchFontMask) || $0.isFixedPitch } ?? false
         return EditorSnapshot(pid: foreground.processIdentifier, element: editor, selection: selection,
-                              windowStart: start, before: before, after: after,
+                              windowStart: start, before: before, after: after, rightBoundaryKnown: rightBoundaryKnown,
                               baseAttributes: attributes, isMonospaced: mono)
     }
 

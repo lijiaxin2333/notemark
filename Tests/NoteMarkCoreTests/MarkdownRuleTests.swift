@@ -23,6 +23,49 @@ final class MarkdownRuleTests: XCTestCase {
         XCTAssertNil(MarkdownRule.plan(beforeCaret: "#", trigger: .space, afterCaret: "已有内容"))
         XCTAssertEqual(MarkdownRule.plan(beforeCaret: "#", trigger: .space, afterCaret: "\n")?.conversion, .paragraph(.title))
     }
+    func testBulletPrefixBeforeExistingTextOnlyRemovesTheMarker() {
+        for marker in ["-", "*"] {
+            for text in ["你好", "🌳 Hello", "? question", " already indented"] {
+                let plan = MarkdownRule.plan(beforeCaret: marker, trigger: .space, afterCaret: text)
+                XCTAssertEqual(plan?.conversion, .paragraph(.bullets))
+                XCTAssertEqual(plan?.range, NSRange(location: 0, length: 1))
+                XCTAssertEqual(plan?.original, marker)
+                let original = marker + text
+                if let plan {
+                    XCTAssertEqual((original as NSString).replacingCharacters(in: plan.range, with: ""), text)
+                }
+            }
+        }
+    }
+    func testExistingTextBulletPrefixUsesUTF16ParagraphStart() {
+        let before = "🌳 前一段\n-"
+        let plan = MarkdownRule.plan(beforeCaret: before, windowStart: 100, trigger: .space, afterCaret: "你好")
+        XCTAssertEqual(plan?.range, NSRange(location: 100 + (before as NSString).length - 1, length: 1))
+        XCTAssertEqual(plan?.conversion, .paragraph(.bullets))
+    }
+    func testExistingTextConversionRequiresOnlyABulletAtLineStart() {
+        for before in ["你好-", " -", "\\-", "#", "##", "1.", ">", "/bullets"] {
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: before, trigger: .space, afterCaret: "你好"), before)
+        }
+        XCTAssertNil(MarkdownRule.plan(beforeCaret: "-", windowStart: 10, trigger: .space, afterCaret: "你好"))
+    }
+    func testExistingTextBulletDoesNotConvertCodeOrSelections() {
+        XCTAssertNil(MarkdownRule.plan(beforeCaret: "-", trigger: .space, isMonospaced: true, afterCaret: "你好"))
+        XCTAssertNil(MarkdownRule.plan(beforeCaret: "-", trigger: .space, selectionLength: 1, afterCaret: "你好"))
+        XCTAssertNil(MarkdownRule.plan(beforeCaret: "-", trigger: .enter, afterCaret: "你好"))
+    }
+    func testExistingTextBulletRejectsImagesInCurrentParagraphOnly() {
+        for tail in ["\u{fffc}", "你好\u{fffc}", "你好 \u{fffc} 后面的文字"] {
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: "-", trigger: .space, afterCaret: tail), tail)
+        }
+        XCTAssertEqual(MarkdownRule.plan(beforeCaret: "-", trigger: .space, afterCaret: "你好\n\u{fffc}")?.conversion,
+                       .paragraph(.bullets))
+    }
+    func testBulletRejectsUnknownOrTruncatedRightBoundary() {
+        for tail in ["", "?", "你好", String(repeating: "a", count: 512)] {
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: "-", trigger: .space, afterCaret: tail, rightBoundaryKnown: false))
+        }
+    }
     func testUnicodeParagraphOffsets() {
         let input = "🌳 算法\n##"
         let result = MarkdownRule.plan(beforeCaret: input, windowStart: 100, trigger: .space)

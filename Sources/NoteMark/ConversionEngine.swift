@@ -182,7 +182,7 @@ final class ConversionEngine {
         guard let snapshot = NotesAccessibility.snapshot(),
               let plan = MarkdownRule.plan(beforeCaret: snapshot.before, windowStart: snapshot.windowStart,
                                            trigger: trigger, isMonospaced: snapshot.isMonospaced,
-                                           afterCaret: snapshot.after) else { return false }
+                                           afterCaret: snapshot.after, rightBoundaryKnown: snapshot.rightBoundaryKnown) else { return false }
         beginConversion(plan, snapshot: snapshot, original: event.copy())
         return true
     }

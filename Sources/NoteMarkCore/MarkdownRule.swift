@@ -43,7 +43,7 @@ public enum MarkdownRule {
     public static func plan(
         beforeCaret: String, windowStart: Int = 0,
         trigger: Trigger, isMonospaced: Bool = false,
-        selectionLength: Int = 0, afterCaret: String = ""
+        selectionLength: Int = 0, afterCaret: String = "", rightBoundaryKnown: Bool = true
     ) -> EditPlan? {
         guard selectionLength == 0, windowStart >= 0 else { return nil }
         let ns = beforeCaret as NSString
@@ -52,9 +52,13 @@ public enum MarkdownRule {
         let line = ns.substring(from: lineStart)
         guard !line.contains("\u{fffc}") else { return nil }
         let atStartKnown = windowStart == 0 || lastNewline.location != NSNotFound
-        let rightIsEmpty = afterCaret.isEmpty || afterCaret.first?.isNewline == true
+        let rightIsEmpty = rightBoundaryKnown && (afterCaret.isEmpty || afterCaret.first?.isNewline == true)
+        let rightText = afterCaret as NSString
+        let rightNewline = rightText.rangeOfCharacter(from: .newlines)
+        let paragraphTail = rightNewline.location == NSNotFound ? afterCaret : rightText.substring(to: rightNewline.location)
+        let listBeforeText = rightBoundaryKnown && ["-", "*"].contains(line) && !paragraphTail.contains("\u{fffc}")
 
-        if atStartKnown && rightIsEmpty,
+        if atStartKnown && (rightIsEmpty || listBeforeText),
            let style = paragraphStyle(for: line, trigger: trigger, isMonospaced: isMonospaced) {
             return EditPlan(range: NSRange(location: windowStart + lineStart, length: (line as NSString).length),
                             original: line, conversion: .paragraph(style))
