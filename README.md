@@ -1,88 +1,116 @@
 # NoteMark
 
-给 Apple 备忘录添加 Markdown 输入的本地菜单栏辅助程序，使用 Swift、AppKit、Accessibility 和 Core Graphics。目标是在备忘录窗口中直接输入，不另开 Markdown 编辑器。
+Write Markdown directly in Apple Notes. NoteMark converts it into native Notes formatting.
 
-这是 **0.1.3 测试版**。已在 macOS 27.0.1 / Apple Silicon 编译；自动转换是否能在当前 Notes 编辑器完整工作，需要授权后的真实输入测试。没有使用 Computer Use 开发或测试，也没有修改 Notes 数据库。
+在 Apple 备忘录中直接写 Markdown，NoteMark 会将标记转换为备忘录原生格式。
 
-## 运行
+**Version / 版本：0.1.3 beta** · macOS 14+ · Apple Silicon build / 当前安装包适用于 Apple Silicon
 
-1. 打开 `dist/NoteMark.app`。建议先复制到 `/Applications`，再授予权限，避免路径变化造成授权失效。
-2. 点击“授权辅助功能”，在系统设置中允许 NoteMark。
-3. 权限就绪后自动开启转换，无需再点击开关：启动时已有权限会立即开启；运行中授权后会在约 2 秒内检测并开启。如果仍然无法监听输入，在“输入监控设置”中授权；若 macOS 要求重新启动，退出并重新打开 App 即可自动开启。
-4. 在备忘录中新建一篇测试笔记，再尝试下面的语法。可从菜单栏暂停或退出。
+[English](#english) · [中文](#中文) · [Syntax / 语法](#syntax--语法)
 
-手动暂停会保持到本次运行结束，权限轮询不会覆盖你的暂停操作。点击“恢复转换”可继续；下一次启动仍然默认自动开启。
+## English
 
-第一次授权只能由用户在 macOS 系统设置中完成。App 不请求完全磁盘访问、不请求 Apple Events 权限。监听事件仅在 Apple Notes 是前台 App 时进行解析；只读取光标前最多 512 个 UTF-16 单元和紧邻光标的边界，不记录、上传或持久化笔记与键盘内容。
+### Install and grant permissions
 
-## 支持的语法
+1. Unzip the package and move **NoteMark.app** to **Applications** before granting permissions. If building from source, use the app in `dist/`.
+2. Open NoteMark. Click **授权辅助功能** (Grant Accessibility). In **System Settings → Privacy & Security → Accessibility**, enable **NoteMark**. Add it from Applications with the **+** button if it is missing.
+3. Conversion starts automatically when permission is ready, usually within 2 seconds. If input is still not detected, click **输入监控设置…** (Input Monitoring Settings), then enable NoteMark in **System Settings → Privacy & Security → Input Monitoring**. Quit and reopen NoteMark if macOS asks you to restart it.
+4. Open **Apple Notes**, create a new test note, and type `-` followed by Space. It should become a bullet list. Try the [syntax below](#syntax--语法).
 
-### Slash 命令菜单
+The app's buttons are currently in Chinese; the labels above match what you see. Permissions must be granted manually in System Settings. Full Disk Access is not required.
 
-在非代码段落的空行输入 `/`，光标旁弹出 10 种格式命令。继续输入英文别名或中文名称可以搜索，例如 `/h2`、`/code`、`/引用`。按 `↑`、`↓` 选择，`Return` 或 `Tab` 执行，`Esc` 关闭并保留原文字；也可直接点击命令。
+### Use NoteMark
 
-命令包括标题、小标题、次级标题、正文、代码块、引用、待办清单、项目符号列表、虚线列表与编号列表。执行时删除当前 `/查询`，应用备忘录原生段落格式；不插入多余换行。菜单不抢走 Notes 的键盘焦点，点击菜单外、移动光标、滚动或切换 App 会关闭。
+- Keep Apple Notes in front and type in the note body. Start paragraph markers on an empty line, then press **Space**.
+- Type `/` on an empty line for the command menu. Search with `/h2` or `/code`; use **↑ / ↓** to select and **Return / Tab** to apply. **Esc** closes the menu and keeps your text. You can also click a command.
+- Finish an inline marker such as `**bold**`, then press **Space** or **Return** to convert it.
+- Use the NoteMark menu bar icon to **暂停 Markdown 转换** (Pause), **恢复 Markdown 转换** (Resume), or **退出 NoteMark** (Quit). Pausing lasts for the current session; the next launch starts automatically when permission is ready.
+- Use **⌘Z** to undo. Paragraph conversion may need two undo actions.
 
-路径、网址、行内 `/`、选中的文字及代码段落不会触发。文字后的第一字符必须为换行或文档结束。光标坐标不可用时，菜单退回到编辑区左上方；编辑区位置也不可用时，不显示菜单。中文输入法候选确认仍需真实输入测试。
+## 中文
 
-### 输入标记自动转换
+### 安装与权限配置
 
-在空行行首输入下列标记，然后按空格：
+1. 解压安装包，先将 **NoteMark.app** 移到 **应用程序（Applications）**，再配置权限。自行编译时，App 位于 `dist/`。
+2. 打开 NoteMark，点击 **授权辅助功能**。在 **系统设置 → 隐私与安全性 → 辅助功能** 中开启 **NoteMark**。列表中没有时，点击 **+**，从应用程序中添加。
+3. 权限就绪后自动开启转换，通常在 2 秒内生效。如果仍无法识别输入，点击 **输入监控设置…**，在 **系统设置 → 隐私与安全性 → 输入监控** 中开启 NoteMark。系统要求重启时，退出并重新打开 NoteMark。
+4. 打开 **Apple 备忘录**，新建测试笔记，输入 `-` 再按空格，应转换为圆点列表。其他语法见下表。
 
-| 输入 | 结果 |
+权限需要在系统设置中手动授予，无需完全磁盘访问权限。
+
+### 使用方法
+
+- 在备忘录正文中输入，并保持备忘录位于前台。段落标记要在空行行首输入，再按 **空格**。
+- 空行输入 `/` 打开命令菜单。输入 `/h2` 或 `/code` 搜索，用 **↑ / ↓** 选择，按 **回车 / Tab** 执行。**Esc** 关闭并保留文字，也可点击命令。
+- 写完 `**粗体**` 等行内标记后，按 **空格或回车** 转换。
+- 点击菜单栏 NoteMark 图标，可 **暂停 Markdown 转换**、**恢复 Markdown 转换** 或 **退出 NoteMark**。手动暂停仅保持到本次退出；下次启动会在权限就绪后自动开启。
+- 按 **⌘Z** 撤销。段落转换可能需要撤销两次。
+
+## Syntax / 语法
+
+At the start of an empty line, type a marker and press **Space**.
+
+在空行行首输入标记，再按 **空格**。
+
+| Input / 输入 | Result / 效果 |
 | --- | --- |
-| `#`、`##`、`###` | 原生标题、小标题、次级标题 |
-| `[]`、`[ ]`、`- [ ]` | 原生待办清单 |
-| `-`、`*` | 原生圆点项目符号列表 |
-| `1.` | 原生编号列表 |
-| `>` | 原生引用 |
-| 三个反引号 | 原生等宽代码段落；在代码段落再次输入退出 |
-| `/h1`、`/h2`、`/h3`、`/body` | 切换原生段落样式 |
-| `/code`、`/quote`、`/checklist`、`/bullets`、`/numbered` | 对应段落样式 |
+| `#` / `##` / `###` | Title / Heading / Subheading · 标题 / 小标题 / 次级标题 |
+| `-` / `*` | Bullet list `•` · 圆点列表 |
+| `1.` | Numbered list · 编号列表 |
+| `[]` / `[ ]` / `- [ ]` | Checklist · 待办清单 |
+| `>` | Quote · 引用 |
+| Three backticks / 三个反引号 | Monospaced code paragraph; repeat to exit · 等宽代码段落，再次输入退出 |
 
-也可以输入三个反引号加 `swift` 等语言名后按回车开始代码段落。没有语法高亮。
+Three backticks followed by a language name, such as `swift`, also start a code paragraph when you press **Return**. There is no syntax highlighting.
 
-行内写完 `**粗体**`、`*斜体*`、`***粗斜体***`、`__粗体__`、`_斜体_`、反引号代码、`~~删除线~~` 或 `[文字](https://example.com)`，按空格或回车转换最后一段。默认只在词边界识别，不转换变量名内部的下划线或星号。
+三个反引号后加 `swift` 等语言名，再按 **回车**，也可开始代码段落；不提供语法高亮。
 
-段落通过原生 Notes 菜单命令排版，沿用系统默认字号。行内通过 RTF 替换相应范围，使用光标处读到的字体大小；若读不到字体，就保留 Markdown。行内转换期间会短暂使用系统剪贴板，粘贴确认后恢复原内容；用户同时复制了新内容时不会覆盖新剪贴板。
+Inline markers / 行内标记：`**bold**`、`*italic*`、`***bold italic***`、`__bold__`、`_italic_`、`` `code` ``、`~~strike~~`、`[link](https://example.com)`。
 
-## 当前边界
+Slash commands / Slash 命令：`/h1`、`/h2`、`/h3`、`/body`、`/code`、`/quote`、`/checklist`、`/bullets`、`/dashed`、`/numbered`。Chinese names also work in menu search / 中文名称也可用于菜单搜索。
 
-- 这是外围辅助程序形式的“插件”，没有向 Notes 进程注入代码。
-- 未实现 ProNotes 的浮动格式栏、AI、Markdown 导出、整篇转换、嵌套语法与图片 Markdown 插入。Slash 菜单提供本地段落格式命令。
-- 编辑只作用于当前标记范围；不重新导入整篇笔记。含图片锚点的当前段落不自动转换，其他段落的图片不参与编辑。
-- 只处理空选择范围；搜索框等非正文控件不转换。输入法正在组词时，如果编辑器提供标记范围，就跳过转换。不同中文输入法仍需实测。
-- 备忘录的邮件账户、锁定笔记、表格、系统快捷键自定义以及 macOS 更新可能影响可用命令；无法确认编辑器或命令时保留原文。
-- 行内转换可用一次 `⌘Z` 撤销；段落删除标记与格式转换属于两次原生操作，可能需要两次撤销。
-- 避免在转换的瞬间切换窗口或切换输入法。快速连续输入和鼠标点击会短暂排队，转换结束后按原顺序重放；这一并发路径仍需要真实输入测试。
-- 本地构建采用 ad-hoc 签名；正式分发需要稳定的 Developer ID 签名与公证。重新构建后可能需要重新授权辅助功能。
+## Troubleshooting / 无法转换时
 
-## 开发
+- Check permissions for the copy in **Applications**, then quit and reopen NoteMark. Rebuilt apps may need permission again.
+  检查 **应用程序** 中的 NoteMark 是否已授权，再退出并重新打开。重新编译后可能需要再次授权。
+- If paused, choose **恢复 Markdown 转换** (Resume). If the connection failed, choose **重试输入连接** (Retry Input Connection).
+  已暂停时点击 **恢复 Markdown 转换**；连接失败时点击 **重试输入连接**。
+- Try an empty line in a new, unlocked note. Search fields, selected text, and code paragraphs do not trigger normal Markdown conversion.
+  先在新建、未锁定笔记的空行试用。搜索框、选中文字和代码段落不会触发普通 Markdown 转换。
 
-需要 macOS 14+ 与 Xcode/Swift 工具链。没有第三方依赖。
+## Notes / 注意事项
+
+- This is a local menu bar helper. It does not store or upload note content, or modify the Notes database.
+  这是本地菜单栏辅助程序，不保存或上传笔记内容，不修改备忘录数据库。
+- Paragraphs use native Notes styles; inline formatting preserves the current font size. Inline conversion briefly uses the clipboard, then restores it unless you have copied something new.
+  段落使用备忘录原生样式，行内格式保留当前字号。行内转换会短暂使用剪贴板；若未复制新内容，转换后会恢复原内容。
+- Whole-note conversion, nested Markdown, and Markdown image insertion are not supported. Paragraphs containing images are skipped.
+  暂不支持整篇转换、嵌套 Markdown 和 Markdown 图片插入；包含图片的当前段落会跳过转换。
+- Tested builds use macOS 27.0.1 and Apple Silicon. Real Notes input, IME behavior, and rapid typing still need manual testing. See [validation details](VALIDATION.md).
+  已在 macOS 27.0.1 / Apple Silicon 编译；真实备忘录输入、输入法和快速连续输入仍需手动验证。详见 [验证说明](VALIDATION.md)。
+
+## Build / 编译
+
+Requires macOS 14+ and an Xcode/Swift toolchain. No third-party dependencies.
+
+需要 macOS 14+ 和 Xcode/Swift 工具链，无第三方依赖。
 
 ```sh
 swift test
 sh scripts/build.sh
+```
+
+Output / 输出：`dist/NoteMark.app`、`dist/NoteMark-0.1.3.zip`。The build uses ad-hoc signing / 构建使用本地 ad-hoc 签名。
+
+```sh
 dist/NoteMark.app/Contents/MacOS/NoteMark --self-check
 dist/NoteMark.app/Contents/MacOS/NoteMark --diagnose
 ```
 
-`--self-check` 只检查本地规则；`--diagnose` 只打印系统版本和本进程权限，不读笔记，也不申请权限。支持 macOS 14+ 的声明只代表部署目标；本次实际编译环境是 macOS 27.0.1。
+`--self-check` checks local rules. `--diagnose` prints the OS version and this process's permissions without reading notes or requesting permission.
 
-代码分为纯规则与 Slash 查询 `NoteMarkCore`、正文范围读取 `NotesAccessibility`、转换与输入排队 `ConversionEngine`、非激活浮层 `SlashCommandPanel`、菜单栏和权限页面 `AppDelegate`。
+`--self-check` 检查本地规则；`--diagnose` 输出系统版本和本进程权限，不读取笔记或申请权限。
 
-构建脚本会生成 `dist/NoteMark.app` 和 `dist/NoteMark-0.1.3.zip`，并检查签名与本地规则。`dist/`、Swift/Xcode 构建缓存、编辑器本地配置及 `.env` 文件均由 `.gitignore` 排除，仓库只保留源码、测试和文档。
+Build output and local configuration are ignored by Git / 构建产物和本地配置已由 Git 忽略。
 
-## 授权后的手动验证
-
-1. 新笔记输入 `##` 加空格，确认标记被移除并产生原生小标题。
-2. 输入中文、emoji，再写 `**粗体**` 加空格，确认范围正确、后续文字回到原字号和字体。
-3. 开始代码段落，输入 `a * b`、`snake_case`、`#define`，确认没有误转换；再次输入三个反引号退出。
-4. 插入一张图片，在图片下一段转换标题，确认图片仍在原位。
-5. 用中文输入法测试组词与候选确认，测试快速连续输入和撤销。
-6. 切换到其他 App、Notes 搜索框、表格、锁定笔记，确认不会误编辑。
-7. 行内转换前复制文字或图片，转换后检查剪贴板恢复；转换时同时复制新内容，确认新内容不会被覆盖。
-8. 空行输入 `/`：检查菜单位置、英文和中文搜索、上下键循环选择、回车、Tab、点击执行、Esc 保留文字、空搜索结果，以及切换 App 时关闭。在多显示器、窗口底部、快速输入后立即回车的情况下重复检查。
-
-实现参考：[ProNotes 功能说明](https://www.pronotes.app/)、[Apple Notes 原生快捷键](https://support.apple.com/guide/notes/apd46c25187e/mac)、[Apple Accessibility API](https://developer.apple.com/documentation/applicationservices)、[Core Graphics Event Taps](https://developer.apple.com/documentation/coregraphics/cgevent)。
+License / 许可证：[MIT](LICENSE)。
