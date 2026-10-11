@@ -16,20 +16,20 @@ public struct SlashCommand: Equatable, Identifiable {
         .init(style: .monostyled, title: "代码块", detail: "等宽代码段落", symbol: "chevron.left.forwardslash.chevron.right", aliases: ["code", "mono", "代码", "等宽"]),
         .init(style: .quote, title: "引用", detail: "引用段落", symbol: "text.quote", aliases: ["quote", "引用"]),
         .init(style: .checklist, title: "待办清单", detail: "可勾选的任务列表", symbol: "checklist", aliases: ["checklist", "todo", "待办", "清单", "任务"]),
-        .init(style: .bullets, title: "项目符号列表", detail: "无序列表", symbol: "list.bullet", aliases: ["bullets", "bullet", "list", "无序", "项目"]),
-        .init(style: .dashed, title: "虚线列表", detail: "短横线列表", symbol: "list.dash", aliases: ["dashed", "dash", "虚线", "短横线"]),
-        .init(style: .numbered, title: "编号列表", detail: "有序列表", symbol: "list.number", aliases: ["numbered", "number", "ordered", "编号", "有序"])
+        .init(style: .bullets, title: "项目符号列表", detail: "无序列表", symbol: "list.bullet", aliases: ["bullets", "bullet", "list", "unordered", "unorderedlist", "无序", "项目", "圆点", "符号"]),
+        .init(style: .dashed, title: "虚线列表", detail: "短横线列表", symbol: "list.dash", aliases: ["dashed", "dash", "dashlist", "虚线", "短横线"]),
+        .init(style: .numbered, title: "编号列表", detail: "有序列表", symbol: "list.number", aliases: ["numbered", "number", "ordered", "numberedlist", "orderedlist", "编号", "有序", "序号", "序号列表", "有序号列表", "数字", "数字列表"])
     ]
 
     public static func matching(_ query: String) -> [SlashCommand] {
-        let query = query.lowercased()
+        let query = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !query.isEmpty else { return all }
         return all.enumerated().compactMap { index, command -> (Int, Int, SlashCommand)? in
-            let aliases = command.aliases.map { $0.lowercased() }
+            let terms = (command.aliases + [command.title, command.detail]).map { $0.lowercased() }
             let rank: Int
-            if aliases.contains(query) { rank = 0 }
-            else if aliases.contains(where: { $0.hasPrefix(query) }) { rank = 1 }
-            else if aliases.contains(where: { $0.contains(query) }) { rank = 2 }
+            if terms.contains(query) { rank = 0 }
+            else if terms.contains(where: { $0.hasPrefix(query) }) { rank = 1 }
+            else if terms.contains(where: { $0.contains(query) }) { rank = 2 }
             else { return nil }
             return (rank, index, command)
         }.sorted { ($0.0, $0.1) < ($1.0, $1.1) }.map { $0.2 }
@@ -50,8 +50,10 @@ public struct SlashQuery: Equatable {
         guard windowStart == 0 || newline.location != NSNotFound else { return nil }
         let start = newline.location == NSNotFound ? 0 : NSMaxRange(newline)
         let line = text.substring(from: start)
-        guard line.hasPrefix("/"), line.count <= 41 else { return nil }
-        let query = String(line.dropFirst())
+        guard line.hasPrefix("/") || line.hasPrefix("／"), line.count <= 41 else { return nil }
+        // Spaces used to confirm an IME candidate may remain after the command.
+        // Search the trimmed name, but remove the entire original range on execution.
+        let query = String(line.dropFirst()).trimmingCharacters(in: .whitespaces)
         guard query.unicodeScalars.allSatisfy({ CharacterSet.letters.union(.decimalDigits).contains($0) || $0 == "-" || $0 == "_" }) else { return nil }
         return SlashQuery(query: query, range: NSRange(location: windowStart + start, length: (line as NSString).length), original: line)
     }

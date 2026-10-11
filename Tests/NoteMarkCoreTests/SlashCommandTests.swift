@@ -23,6 +23,66 @@ final class SlashCommandTests: XCTestCase {
         XCTAssertTrue(SlashCommand.matching("notacommand").isEmpty)
     }
 
+    func testSearchIncludesEveryVisibleTitleAndDetail() {
+        for command in SlashCommand.all {
+            XCTAssertEqual(SlashCommand.matching(command.title).first?.style, command.style, command.title)
+            XCTAssertEqual(SlashCommand.matching(command.detail).first?.style, command.style, command.detail)
+        }
+    }
+
+    func testListSearchReturnsEveryListStyleInChineseAndEnglish() {
+        let lists: Set<ParagraphStyle> = [.checklist, .bullets, .dashed, .numbered]
+        XCTAssertEqual(Set(SlashCommand.matching("列表").map(\.style)), lists)
+        XCTAssertEqual(Set(SlashCommand.matching("LIST").map(\.style)), lists)
+        XCTAssertEqual(SlashCommand.matching("list").first?.style, .bullets)
+        XCTAssertEqual(SlashCommand.matching("符号").first?.style, .bullets)
+        XCTAssertEqual(SlashCommand.matching("任务列表").first?.style, .checklist)
+        XCTAssertEqual(SlashCommand.matching("短横线列表").first?.style, .dashed)
+    }
+
+    func testNumberedListSynonymsAndExactOrdering() {
+        for query in ["编号", "编号列表", "序号", "序号列表", "有序号列表", "数字", "数字列表", "有序列表", "ordered", "numbered"] {
+            XCTAssertEqual(SlashCommand.matching(query).first?.style, .numbered, query)
+        }
+        XCTAssertEqual(SlashCommand.matching("无序列表").first?.style, .bullets)
+        XCTAssertEqual(SlashCommand.matching("unordered").first?.style, .bullets)
+        XCTAssertEqual(SlashCommand.matching("h1").first?.style, .title)
+        XCTAssertEqual(SlashCommand.matching("h2").first?.style, .heading)
+        XCTAssertTrue(SlashCommand.matching("不存在的命令").isEmpty)
+    }
+
+    func testChineseAndEnglishCommandsKeepTrailingSpacesInEditRange() throws {
+        for (input, name, style) in [("/标题 ", "标题", ParagraphStyle.title),
+                                     ("/title  ", "title", .title), ("/H2 ", "H2", .heading),
+                                     ("／小标题　", "小标题", .heading), ("/代码\u{00a0}", "代码", .monostyled)] {
+            let prefix = "👩🏽‍💻\n"
+            let query = try XCTUnwrap(SlashQuery.parse(beforeCaret: prefix + input, windowStart: 20), input)
+            XCTAssertEqual(query.query, name)
+            XCTAssertEqual(query.original, input)
+            XCTAssertEqual(query.range, NSRange(location: 20 + (prefix as NSString).length,
+                                               length: (input as NSString).length))
+            let command = try XCTUnwrap(SlashCommand.matching(query.query).first)
+            XCTAssertEqual(command.style, style)
+            XCTAssertEqual(query.plan(for: command).original, input)
+        }
+    }
+
+    func testParserNormalizesWhitespaceSeparatelyFromMenuVisibility() throws {
+        for input in ["/ ", "/　", "／", "／ "] {
+            let query = try XCTUnwrap(SlashQuery.parse(beforeCaret: input), input)
+            XCTAssertEqual(query.query, "")
+            XCTAssertEqual(SlashCommand.matching(query.query), SlashCommand.all)
+        }
+        XCTAssertEqual(SlashCommand.matching(" TITLE　").first?.style, .title)
+        XCTAssertEqual(SlashCommand.matching("标题 ").first?.style, .title)
+    }
+
+    func testWhitespaceInsideCommandAndFullWidthPathsAreRejected() {
+        for input in ["/ti tle ", "/标 题", "／usr/bin", "／／", "/title\tmore"] {
+            XCTAssertNil(SlashQuery.parse(beforeCaret: input), input)
+        }
+    }
+
     func testQueryRangeUsesUTF16AndLeavesPreviousParagraphsAlone() throws {
         let query = try XCTUnwrap(SlashQuery.parse(beforeCaret: "👩🏽‍💻 算法\n/代码", windowStart: 100))
         XCTAssertEqual(query.range.location, 100 + ("👩🏽‍💻 算法\n" as NSString).length)

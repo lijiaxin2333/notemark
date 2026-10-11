@@ -6,7 +6,7 @@ final class ConversionEngine {
     var onStatus: ((String) -> Void)?
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var busy: EditorSnapshot?
+    private var busy = false
     private var buffered: [CGEvent] = []
     private(set) var running = false
     private var timeoutCount = 0
@@ -15,6 +15,11 @@ final class ConversionEngine {
     private var slashUpdate: Task<Void, Never>?
     private var slashTracking = false
     private var slashSuppressed = false
+    private var slashSession = SlashMenuSession()
+    private var slashEditor: EditorSnapshot?
+    private var notesObserver: AXObserver?
+    private var observedApplication: AXUIElement?
+    private var observedEditor: AXUIElement?
     private var workspaceObserver: NSObjectProtocol?
     private var emptyHeading: (snapshot: EditorSnapshot, cancellation: EmptyHeadingCancellation)?
 
@@ -48,11 +53,14 @@ final class ConversionEngine {
         running = true
         timeoutCount = 0
         recentInput = ""
+        observeNotesEditor()
         workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
                                                                                object: nil, queue: .main) { [weak self] _ in
             if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != NotesAccessibility.bundleID {
                 self?.dismissSlash()
                 self?.emptyHeading = nil
+            } else {
+                self?.observeNotesEditor()
             }
         }
         onStatus?("已开启 · 在备忘录中输入 Markdown")
@@ -62,6 +70,12 @@ final class ConversionEngine {
     func stop() {
         emptyHeading = nil
         dismissSlash()
+        if let observer = notesObserver {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
+        }
+        notesObserver = nil
+        observedApplication = nil
+        observedEditor = nil
         if let workspaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver) }
         workspaceObserver = nil
         if let source = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
@@ -86,18 +100,31 @@ final class ConversionEngine {
             dismissSlash()
             return false
         }
-        if busy != nil {
+        if busy {
             // Preserve rapid typing while the native editor acknowledges an edit.
             if let copy = event.copy() { buffered.append(copy) }
             return true
         }
-        if type == .scrollWheel { emptyHeading = nil; dismissSlash(); return false }
+        if type == .scrollWheel {
+            emptyHeading = nil
+            if slashTracking, NotesAccessibility.isComposing() { scheduleSlashUpdate(); return false }
+            dismissSlash(); return false
+        }
         if [.leftMouseDown, .rightMouseDown, .otherMouseDown].contains(type) {
             emptyHeading = nil
+            if slashTracking, NotesAccessibility.isComposing() { scheduleSlashUpdate(); return false }
             if !slashPanel.containsMouse() { recentInput = ""; dismissSlash() }
             return false
         }
         let key = event.getIntegerValueField(.keyboardEventKeycode)
+        if running, type == .keyDown, slashTracking || slashPanel.isVisible,
+           NotesAccessibility.isComposing() {
+            // Do this before modifiers, repeat filtering, and menu navigation: every
+            // candidate key (including Shift/Option and Esc) belongs to the IME.
+            slashSession.noteSearchInput(isDeletion: key == 51)
+            scheduleSlashUpdate()
+            return false
+        }
         if running, type == .keyDown {
             let modifiers = event.flags.intersection([.maskShift, .maskCommand, .maskControl, .maskAlternate])
             let cancelKey = ([51, 53].contains(key) && modifiers.isEmpty) ||
@@ -126,13 +153,10 @@ final class ConversionEngine {
                 (slashPanel.isVisible && [125, 126].contains(event.getIntegerValueField(.keyboardEventKeycode))),
               event.flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty else { return false }
         if slashPanel.isVisible && !event.flags.contains(.maskShift) {
-            if NotesAccessibility.isComposing() {
-                scheduleSlashUpdate()
-                return false // Candidate navigation and confirmation belong to the IME.
-            }
             if key == 126 || key == 125 {
                 slashUpdate?.cancel()
                 updateSlashMenu()
+                guard slashPanel.isVisible else { return false }
                 slashPanel.move(key == 126 ? -1 : 1)
                 return true
             }
@@ -142,13 +166,20 @@ final class ConversionEngine {
                 dismissSlash()
             }
         }
+        if key == 49, slashTracking, !slashSuppressed {
+            // Space is search input, not a Markdown delimiter while the slash
+            // session is active. Keep tracking even before the panel is first shown.
+            slashSession.noteSearchInput()
+            scheduleSlashUpdate()
+            return false
+        }
         let trigger: Trigger
         if key == 49 { trigger = .space }
         else if key == 36 || key == 76 { trigger = .enter }
         else {
             if key == 51 {
                 if !recentInput.isEmpty { recentInput.removeLast() }
-                if slashTracking { scheduleSlashUpdate() }
+                if slashTracking { slashSession.noteSearchInput(isDeletion: true); scheduleSlashUpdate() }
                 return false
             }
             if [123, 124, 125, 126, 115, 119, 116, 121, 48, 53].contains(key) {
@@ -160,13 +191,21 @@ final class ConversionEngine {
             let typed = String(utf16CodeUnits: characters, count: count)
             recentInput += typed
             recentInput = String(recentInput.suffix(64))
-            if typed.contains("/") { slashSuppressed = false; slashTracking = true }
+            // Some IMEs do not put committed punctuation in the raw CGEvent string.
+            if typed.contains("/") || typed.contains("／") || (key == 44 && !event.flags.contains(.maskShift)) {
+                bindObservedEditor()
+                slashSession.begin()
+                slashEditor = nil
+                slashSuppressed = false; slashTracking = true
+            } else if slashTracking {
+                slashSession.noteSearchInput()
+            }
             if slashTracking && !slashSuppressed { scheduleSlashUpdate() }
             return false
         }
         guard !event.flags.contains(.maskShift) else { recentInput = ""; return false }
         // Avoid Accessibility round trips on ordinary prose spaces and returns.
-        let mayMatch = recentInput.last.map { "#*_`~].>)".contains($0) } ?? false
+        let mayMatch = recentInput.last.map { "#*_`~]］】.>)".contains($0) } ?? false
         let slashCommand = recentInput.hasPrefix("/") || recentInput.contains("\n/")
         if slashSuppressed && slashCommand {
             recentInput = trigger == .enter ? "\n" : ""
@@ -174,23 +213,68 @@ final class ConversionEngine {
             return false
         }
         dismissSlash()
-        guard mayMatch || slashCommand || recentInput.contains("```") || ["-", "[]", "[ ]", "- [ ]", "1."].contains(recentInput) else {
+        let looksLikeMarkdown = mayMatch || slashCommand || recentInput.contains("```") || ["-", "[]", "[ ]", "- [ ]", "1."].contains(recentInput)
+        guard trigger == .space || looksLikeMarkdown else {
             recentInput = trigger == .space ? "" : "\n"
             return false
         }
         recentInput = ""
-        guard let snapshot = NotesAccessibility.snapshot(),
-              let plan = MarkdownRule.plan(beforeCaret: snapshot.before, windowStart: snapshot.windowStart,
-                                           trigger: trigger, isMonospaced: snapshot.isMonospaced,
-                                           afterCaret: snapshot.after, rightBoundaryKnown: snapshot.rightBoundaryKnown) else { return false }
-        beginConversion(plan, snapshot: snapshot, original: event.copy())
+        guard !NotesAccessibility.isComposing(), let snapshot = NotesAccessibility.snapshot() else {
+            if looksLikeMarkdown { onStatus?("未转换 · 无法读取正文光标，或输入法正在组词") }
+            return false
+        }
+        // IMEs may commit brackets without supplying matching Unicode in CGEvent.
+        // The editor's text is authoritative; ordinary prose spaces pass through.
+        if !looksLikeMarkdown,
+           MarkdownRule.plan(beforeCaret: snapshot.before, windowStart: snapshot.windowStart,
+                             trigger: trigger, isMonospaced: snapshot.isMonospaced,
+                             afterCaret: snapshot.after, rightBoundaryKnown: snapshot.rightBoundaryKnown) == nil {
+            return false
+        }
+        beginTriggeredConversion(trigger, snapshot: snapshot, original: event.copy())
         return true
+    }
+
+    private func beginTriggeredConversion(_ trigger: Trigger, snapshot: EditorSnapshot, original: CGEvent?) {
+        busy = true
+        onStatus?("已检测 Markdown 标记 · 等待编辑器更新")
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            var converted = false
+            var diagnostic = "编辑器快照不可用"
+            // The event tap sees Space before Notes necessarily handles the preceding ']'.
+            // Keep Space and later input queued while Notes acknowledges that input.
+            let acknowledged: (EditorSnapshot, EditPlan)? = await InputAcknowledgement.wait(isValid: {
+                self.running && NotesAccessibility.sameFocus(snapshot) && !NotesAccessibility.isComposing()
+            }, read: {
+                guard let current = NotesAccessibility.snapshot(), CFEqual(current.element, snapshot.element) else { return nil }
+                let text = current.before as NSString
+                let newline = text.rangeOfCharacter(from: .newlines, options: .backwards)
+                let line = text.substring(from: newline.location == NSNotFound ? 0 : NSMaxRange(newline))
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                diagnostic = "前缀长度=\((line as NSString).length)，待办标记=\(MarkdownRule.checklistMarkers.contains(line))，去空格后待办=\(MarkdownRule.checklistMarkers.contains(trimmed))，等宽=\(current.isMonospaced)，行首边界=\(current.windowStart == 0 || newline.location != NSNotFound)，右边界=\(current.rightBoundaryKnown)，右侧长度=\((current.after as NSString).length)，含图片=\(line.contains("\u{fffc}") || current.after.contains("\u{fffc}"))"
+                guard let plan = MarkdownRule.plan(beforeCaret: current.before, windowStart: current.windowStart,
+                                                   trigger: trigger, isMonospaced: current.isMonospaced,
+                                                   afterCaret: current.after, rightBoundaryKnown: current.rightBoundaryKnown) else { return nil }
+                return (current, plan)
+            })
+            if let (current, plan) = acknowledged {
+                converted = await self.apply(plan, snapshot: current, cancellation: nil)
+            } else {
+                self.onStatus?("未匹配转换规则 · " + diagnostic)
+            }
+            if !converted, let original, NotesAccessibility.sameFocus(snapshot) {
+                // No edit occurred: replay at the current caret without restoring a stale selection.
+                Keyboard.replay(original, pid: snapshot.pid)
+            }
+            self.finishConversion()
+        }
     }
 
     private func beginConversion(_ plan: EditPlan, snapshot: EditorSnapshot, original: CGEvent?,
                                  cancellation: EmptyHeadingCancellation? = nil) {
         // Menu traversal and editing run outside the event-tap callback.
-        busy = snapshot
+        busy = true
         Task { @MainActor [weak self] in
             guard let self else { return }
             let converted = await self.apply(plan, snapshot: snapshot, cancellation: cancellation)
@@ -198,19 +282,26 @@ final class ConversionEngine {
                NotesAccessibility.setSelection(snapshot.element, range: snapshot.selection) {
                 Keyboard.replay(original, pid: snapshot.pid)
             }
-            let queued = self.buffered
-            self.buffered.removeAll()
-            self.busy = nil
-            // Reprocess queued user input so an immediate heading cancellation is recognized.
-            for event in queued { Keyboard.replay(event, reprocess: true) }
+            self.finishConversion()
         }
+    }
+
+    private func finishConversion() {
+        let queued = buffered
+        buffered.removeAll()
+        busy = false
+        // Reprocess queued user input so an immediate heading cancellation is recognized.
+        for event in queued { Keyboard.replay(event, reprocess: true) }
     }
 
     private func dismissSlash() {
         slashUpdate?.cancel()
         slashUpdate = nil
         slashTracking = false
+        slashSession = SlashMenuSession()
+        slashEditor = nil
         slashPanel.dismiss()
+        RuntimeStatus.saveSlash(visible: false, composing: false, matchCount: 0)
     }
 
     private func scheduleSlashUpdate(delay: UInt64 = 40_000_000) {
@@ -222,31 +313,112 @@ final class ConversionEngine {
         }
     }
 
-    private func updateSlashMenu() {
-        guard running, busy == nil, !slashSuppressed else { dismissSlash(); return }
-        if NotesAccessibility.isComposing() {
-            slashTracking = true
-            scheduleSlashUpdate(delay: 150_000_000)
-            return
+    private func observeNotesEditor() {
+        guard let process = NSRunningApplication.runningApplications(withBundleIdentifier: NotesAccessibility.bundleID).first else { return }
+        let app = AXUIElementCreateApplication(process.processIdentifier)
+        AXUIElementSetMessagingTimeout(app, 0.08)
+        if observedApplication.map({ !CFEqual($0, app) }) ?? true {
+            if let observer = notesObserver {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
+            }
+            notesObserver = nil
+            observedEditor = nil
+            var observer: AXObserver?
+            guard AXObserverCreate(process.processIdentifier, { _, _, _, pointer in
+                guard let pointer else { return }
+                let engine = Unmanaged<ConversionEngine>.fromOpaque(pointer).takeUnretainedValue()
+                engine.notesEditorChanged()
+            }, &observer) == .success, let observer else { return }
+            notesObserver = observer
+            observedApplication = app
+            AXObserverAddNotification(observer, app, kAXFocusedUIElementChangedNotification as CFString,
+                                      Unmanaged.passUnretained(self).toOpaque())
+            CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
         }
-        guard
-              let snapshot = NotesAccessibility.snapshot(),
-              let query = SlashQuery.parse(beforeCaret: snapshot.before, windowStart: snapshot.windowStart,
-                                           afterCaret: snapshot.after, isMonospaced: snapshot.isMonospaced),
-              let bounds = NotesAccessibility.caretBounds(snapshot) else { dismissSlash(); return }
-        slashTracking = true
-        slashPanel.show(query: query.query, anchor: bounds)
+        bindObservedEditor()
+    }
+
+    private func bindObservedEditor() {
+        guard let observer = notesObserver, let app = observedApplication,
+              let editor = NotesAccessibility.element(NotesAccessibility.value(app, kAXFocusedUIElementAttribute)) else { return }
+        if let observedEditor, CFEqual(observedEditor, editor) { return }
+        if let observedEditor {
+            for name in [kAXValueChangedNotification, kAXSelectedTextChangedNotification] {
+                AXObserverRemoveNotification(observer, observedEditor, name as CFString)
+            }
+        }
+        dismissSlash()
+        slashSuppressed = false
+        observedEditor = editor
+        AXUIElementSetMessagingTimeout(editor, 0.08)
+        guard NotesAccessibility.value(editor, kAXRoleAttribute) as? String == kAXTextAreaRole else { return }
+        for name in [kAXValueChangedNotification, kAXSelectedTextChangedNotification] {
+            AXObserverAddNotification(observer, editor, name as CFString, Unmanaged.passUnretained(self).toOpaque())
+        }
+    }
+
+    private func notesEditorChanged() {
+        guard running, !busy,
+              NSWorkspace.shared.frontmostApplication?.bundleIdentifier == NotesAccessibility.bundleID else { return }
+        bindObservedEditor()
+        // IME commits and pasted text need not contain a usable raw slash key event.
+        // Observe the editor so committed Chinese search resumes without another key.
+        guard !slashSuppressed else { return }
+        scheduleSlashUpdate()
+    }
+
+    private func updateSlashMenu() {
+        guard running, !busy, !slashSuppressed,
+              NSWorkspace.shared.frontmostApplication?.bundleIdentifier == NotesAccessibility.bundleID else { dismissSlash(); return }
+        if let slashEditor, !NotesAccessibility.sameFocus(slashEditor) { dismissSlash(); return }
+        let composing = NotesAccessibility.isComposing()
+        let snapshot = NotesAccessibility.snapshot(forSlashMenu: true)
+        let update = slashSession.update(beforeCaret: snapshot?.before, windowStart: snapshot?.windowStart ?? 0,
+                                         afterCaret: snapshot?.after ?? "", selectionLength: snapshot?.selection.length ?? 0,
+                                         isMonospaced: snapshot?.isMonospaced ?? false, isComposing: composing)
+        switch update {
+        case .wait:
+            RuntimeStatus.saveSlash(visible: slashPanel.isVisible, composing: composing,
+                                    matchCount: SlashCommand.matching(slashPanel.currentQuery).count)
+            scheduleSlashUpdate(delay: 150_000_000)
+        case .show(let query):
+            guard let snapshot, let bounds = NotesAccessibility.caretBounds(snapshot) else {
+                scheduleSlashUpdate(delay: 150_000_000); return
+            }
+            slashEditor = snapshot
+            slashTracking = true
+            slashPanel.show(query: query, anchor: bounds)
+            RuntimeStatus.saveSlash(visible: slashPanel.isVisible, composing: composing,
+                                    matchCount: SlashCommand.matching(query).count)
+            if composing { scheduleSlashUpdate(delay: 150_000_000) }
+        case .hide:
+            // Keep query history: deleting back to '/' must not reopen the initial
+            // menu. Further edits can still produce a matching command and reopen it.
+            slashUpdate?.cancel()
+            slashUpdate = nil
+            slashEditor = snapshot ?? slashEditor
+            slashTracking = true
+            slashPanel.dismiss()
+            RuntimeStatus.saveSlash(visible: false, composing: composing, matchCount: 0)
+        case .dismiss:
+            dismissSlash()
+        }
     }
 
     private func executeSlash(_ requested: SlashCommand, original: CGEvent?) -> Bool {
-        guard running, busy == nil, let snapshot = NotesAccessibility.snapshot(),
+        // Mouse selection must also wait until the candidate text has been committed.
+        guard !NotesAccessibility.isComposing() else { scheduleSlashUpdate(); return false }
+        let previousQuery = slashPanel.currentQuery
+        updateSlashMenu()
+        guard slashPanel.isVisible else { return false }
+        guard running, !busy, let snapshot = NotesAccessibility.snapshot(),
               let query = SlashQuery.parse(beforeCaret: snapshot.before, windowStart: snapshot.windowStart,
                                            afterCaret: snapshot.after, isMonospaced: snapshot.isMonospaced) else {
             dismissSlash(); return false
         }
         let results = SlashCommand.matching(query.query)
         // Typing immediately before Return may precede the debounced panel update.
-        let command = query.query == slashPanel.currentQuery ? results.first(where: { $0.id == requested.id }) : results.first
+        let command = query.query == previousQuery ? results.first(where: { $0.id == requested.id }) : results.first
         guard let command else { dismissSlash(); return false }
         dismissSlash()
         recentInput = ""
@@ -261,7 +433,9 @@ final class ConversionEngine {
         switch plan.conversion {
         case .paragraph(let style):
             guard let command = NotesAccessibility.command(for: style, pid: snapshot.pid) else {
-                onStatus?(cancellation != nil ? "无法切换正文，已保留原按键操作" : "当前编辑器没有提供可用的格式命令，已保留 Markdown")
+                onStatus?(cancellation != nil ? "无法切换正文，已保留原按键操作" : style == .checklist
+                    ? "待办命令不可用 · 请检查备忘录「格式 → 核对清单」是否可用；已保留 Markdown"
+                    : "当前编辑器没有提供可用的格式命令，已保留 Markdown")
                 return false
             }
             if let cancellation {
@@ -290,7 +464,8 @@ final class ConversionEngine {
             if running, let cancellation = EmptyHeadingCancellation(style: style, paragraphStart: plan.range.location) {
                 emptyHeading = (snapshot, cancellation)
             } else { emptyHeading = nil }
-            onStatus?(cancellation != nil ? "已恢复正文 · 空标题已取消" : "已转换 · 采用备忘录原生格式")
+            onStatus?(cancellation != nil ? "已恢复正文 · 空标题已取消" : style == .checklist
+                ? "已转换 · 原生待办清单" : "已转换 · 采用备忘录原生格式")
             return true
         case .inline(let style, let text, let delimiter):
             guard let attributes = snapshot.baseAttributes,

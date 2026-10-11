@@ -19,6 +19,44 @@ final class MarkdownRuleTests: XCTestCase {
             XCTAssertNil(MarkdownRule.plan(beforeCaret: input, trigger: .space), input)
         }
     }
+    func testChecklistBeforeExistingTextPreservesTheParagraph() {
+        for marker in MarkdownRule.checklistMarkers {
+            for tail in ["", "你好", "🌳 task", "task\nnext paragraph"] {
+                let before = "🌳 前一段\n" + marker
+                let plan = MarkdownRule.plan(beforeCaret: before, windowStart: 100, trigger: .space, afterCaret: tail)
+                XCTAssertEqual(plan?.conversion, .paragraph(.checklist), marker)
+                XCTAssertEqual(plan?.original, marker)
+                XCTAssertEqual(plan?.range, NSRange(location: 107, length: (marker as NSString).length))
+                if let plan {
+                    XCTAssertEqual(((before + tail) as NSString).replacingCharacters(
+                        in: NSRange(location: plan.range.location - 100, length: plan.range.length), with: ""),
+                                   "🌳 前一段\n" + tail)
+                }
+            }
+        }
+    }
+    func testChecklistRejectsUnsafeParagraphs() {
+        for marker in MarkdownRule.checklistMarkers {
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .space, isMonospaced: true))
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .space, selectionLength: 1))
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .enter))
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .space, afterCaret: "task\u{fffc}"))
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .space, afterCaret: "task", rightBoundaryKnown: false))
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, windowStart: 10, trigger: .space, afterCaret: "task"))
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: "text " + marker, trigger: .space))
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: "\\" + marker, trigger: .space))
+        }
+        XCTAssertEqual(MarkdownRule.plan(beforeCaret: "[]", trigger: .space, afterCaret: "task\n\u{fffc}")?.conversion,
+                       .paragraph(.checklist))
+    }
+    func testListMarkerDetectionMatchesRules() {
+        for marker in MarkdownRule.checklistMarkers + ["-", "*"] {
+            XCTAssertTrue(MarkdownRule.isListMarker(marker))
+        }
+        for text in ["[x]", "[task]", "【任务】", "hello []", "1.", "#", "/checklist"] {
+            XCTAssertFalse(MarkdownRule.isListMarker(text))
+        }
+    }
     func testCaretInMiddleOfLineDoesNotConvertParagraph() {
         XCTAssertNil(MarkdownRule.plan(beforeCaret: "#", trigger: .space, afterCaret: "已有内容"))
         XCTAssertEqual(MarkdownRule.plan(beforeCaret: "#", trigger: .space, afterCaret: "\n")?.conversion, .paragraph(.title))

@@ -70,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refresh() {
+        RuntimeStatus.save(running: engine.running, status: status)
         toggleItem.title = engine.running ? "暂停 Markdown 转换" : automaticConversion.wantsConversion ? "重试输入连接" : "恢复 Markdown 转换"
         toggleItem.state = engine.running ? .on : .off
         statusItem.button?.appearsDisabled = !engine.running

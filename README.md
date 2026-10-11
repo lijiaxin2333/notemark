@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 Write Markdown directly in Apple Notes. NoteMark converts it into native Notes formatting.
 
-**Version: 0.1.6 beta** · macOS 14+ · Current build: Apple Silicon
+**Version: 0.1.13 beta** · macOS 14+ · Current build: Apple Silicon
 
 ## Install and grant permissions
 
@@ -19,6 +19,7 @@ Permissions must be granted manually. Full Disk Access is not required. The app 
 
 - Keep Apple Notes in front and type in the note body. Start paragraph markers on an empty line, then press **Space**.
 - To turn existing text into a bullet list, place the caret before its first character, type `-` or `*`, then press **Space**. The text is kept; the result is a native `•` list.
+- For a checklist, type `[]`, then press **Space** and enter the task. This also works before existing paragraph text. Press **Return** for the next task.
 - Type `/` on an empty line for the command menu. Search with `/h2` or `/code`; use **↑ / ↓** to select and **Return / Tab** to apply. **Esc** closes the menu and keeps your text. You can also click a command.
 - Finish an inline marker such as `**bold**`, then press **Space** or **Return** to convert it.
 - After NoteMark creates a title or heading, press **Backspace**, **Esc**, or **Ctrl+K** to return to Body if you have not typed anything or moved the caret. For a line that already contains text, use **⌘⇧B** to switch to Body.
@@ -27,14 +28,14 @@ Permissions must be granted manually. Full Disk Access is not required. The app 
 
 ## Syntax
 
-At the start of an empty line, type a marker and press **Space**. `-` and `*` also work before existing text at the start of a paragraph.
+At the start of an empty line, type a marker and press **Space**. `-`, `*`, `[]`, and `[ ]` also work before existing text at the start of a paragraph.
 
 | Input | Result |
 | --- | --- |
 | `#` / `##` / `###` | Title / Heading / Subheading |
 | `-` / `*` | Bullet list `•` |
 | `1.` | Numbered list |
-| `[]` / `[ ]` / `- [ ]` | Checklist |
+| `[]` / `[ ]` / `- [ ]` | Checklist (also accepts `［］` and `【】`) |
 | `>` | Quote |
 | Three backticks | Monospaced code paragraph; repeat to exit |
 
@@ -44,10 +45,13 @@ Inline markers: `**bold**`, `*italic*`, `***bold italic***`, `__bold__`, `_itali
 
 Slash commands: `/h1`, `/h2`, `/h3`, `/body`, `/code`, `/quote`, `/checklist`, `/bullets`, `/dashed`, `/numbered`.
 
+Search matches command titles, descriptions, and Chinese or English aliases. “列表” shows every list type; “序号列表” matches Numbered List. The full-width `／` also opens the menu. A freshly typed `/` opens the full menu. Further input shows only matching commands (`/标题` or `/题`); a space-only or unmatched query hides it. Backspacing to bare `/` keeps it hidden. A matching query can reopen it; trailing spaces after a valid name do not affect matching. Use Return, Tab, or a click to execute. During IME composition, Space, Return, arrow keys, and Esc belong to the input method; commit the candidate first, then press Return to execute.
+
 ## Troubleshooting
 
 - Check permissions for the copy in **Applications**, then quit and reopen NoteMark. Changing the signing identity may require permission again.
 - If paused, resume conversion from the menu bar. If the input connection failed, use the retry action in that menu.
+- For checklists, check that **Format → Checklist** is available in Notes. You can test it with **⌘⇧L** ([Apple shortcuts](https://support.apple.com/guide/notes/apd46c25187e/mac)). NoteMark keeps the marker if that native command is unavailable.
 - Try an empty line in a new, unlocked note. Search fields, selected text, and code paragraphs do not trigger normal Markdown conversion.
 
 ## Notes
@@ -55,7 +59,7 @@ Slash commands: `/h1`, `/h2`, `/h3`, `/body`, `/code`, `/quote`, `/checklist`, `
 - This is a local menu bar helper. It does not store or upload note content, or modify the Notes database.
 - Paragraphs use native Notes styles; inline formatting preserves the current font size. Inline conversion briefly uses the clipboard, then restores it unless you have copied something new.
 - Whole-note conversion, nested Markdown, and Markdown image insertion are not supported. Paragraphs containing images are skipped.
-- Before converting existing text to a bullet list, NoteMark checks up to 512 UTF-16 units after the caret. Conversion is skipped if it cannot confirm the paragraph's end within that range.
+- Before converting existing text to a bullet list or checklist, NoteMark checks up to 512 UTF-16 units after the caret. Conversion is skipped if it cannot confirm the paragraph's end within that range.
 - Tested builds use macOS 27.0.1 and Apple Silicon. Real Notes input, IME behavior, and rapid typing still need manual testing. See [validation details](VALIDATION.md).
 
 ## Update
@@ -91,14 +95,14 @@ swift test
 sh scripts/build.sh
 ```
 
-Output: `dist/NoteMark.app` and `dist/NoteMark-0.1.6.zip`. Builds use the configured certificate; they fail if no identity is configured. For a temporary ad-hoc test build, use `NOTEMARK_SIGNING_IDENTITY=- sh scripts/build.sh`; the installer rejects these builds.
+Output: `dist/NoteMark.app` and `dist/NoteMark-0.1.13.zip`. Builds use the configured certificate; they fail if no identity is configured. For a temporary ad-hoc test build, use `NOTEMARK_SIGNING_IDENTITY=- sh scripts/build.sh`; the installer rejects these builds.
 
 ```sh
 dist/NoteMark.app/Contents/MacOS/NoteMark --self-check
 dist/NoteMark.app/Contents/MacOS/NoteMark --diagnose
 ```
 
-`--self-check` checks local rules. `--diagnose` prints the OS version and this process's permissions without reading notes or requesting permission.
+`--self-check` checks local rules. `--diagnose` prints the OS version, this process's permissions, and the last app status. The local report contains no note text or keystrokes; it may be stale after the app exits.
 
 Build output and local configuration are ignored by Git.
 

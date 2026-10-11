@@ -1,0 +1,57 @@
+import AppKit
+import ApplicationServices
+
+/// Fixed diagnostic fields only; never store keystrokes or note contents.
+enum RuntimeStatus {
+    static let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("NoteMark/runtime-status.json")
+    private static var lastReport = ""
+    private static var lastRunning = false
+    private static var lastStatus = ""
+    private static var slashVisible = false
+    private static var slashComposing = false
+    private static var slashMatchCount = 0
+
+    static func saveSlash(visible: Bool, composing: Bool, matchCount: Int) {
+        slashVisible = visible
+        slashComposing = composing
+        slashMatchCount = matchCount
+        save(running: lastRunning, status: lastStatus)
+    }
+
+    static func save(running: Bool, status: String) {
+        lastRunning = running
+        lastStatus = status
+        let report = "\(running)|\(status)|\(AXIsProcessTrusted())|\(CGPreflightListenEventAccess())|\(slashVisible)|\(slashComposing)|\(slashMatchCount)"
+        guard report != lastReport else { return }
+        let fields: [String: Any] = [
+            "pid": ProcessInfo.processInfo.processIdentifier,
+            "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development",
+            "running": running,
+            "accessibility": AXIsProcessTrusted(),
+            "inputMonitoring": CGPreflightListenEventAccess(),
+            "status": status,
+            "slashVisible": slashVisible,
+            "slashComposing": slashComposing,
+            "slashMatchCount": slashMatchCount,
+            "updatedAt": ISO8601DateFormatter().string(from: Date())
+        ]
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
+                                                    attributes: [.posixPermissions: 0o700])
+            let data = try JSONSerialization.data(withJSONObject: fields, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: url, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            lastReport = report
+        } catch { /* Diagnostics must never interrupt editing. */ }
+    }
+
+    static func printLastReport() {
+        guard let data = try? Data(contentsOf: url),
+              let report = String(data: data, encoding: .utf8) else {
+            print("No installed-app status report yet.")
+            return
+        }
+        print("Last app status (may be stale if the app has exited):\n\(report)")
+    }
+}

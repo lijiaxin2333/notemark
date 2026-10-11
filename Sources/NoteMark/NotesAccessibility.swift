@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon
 import NoteMarkCore
 
 struct EditorSnapshot {
@@ -70,20 +71,20 @@ enum NotesAccessibility {
         return CFEqual(current, snapshot.element)
     }
 
-    static func snapshot() -> EditorSnapshot? {
+    static func snapshot(forSlashMenu: Bool = false) -> EditorSnapshot? {
         guard let foreground = NSWorkspace.shared.frontmostApplication,
               foreground.bundleIdentifier == bundleID else { return nil }
         let app = AXUIElementCreateApplication(foreground.processIdentifier)
         AXUIElementSetMessagingTimeout(app, 0.08)
         guard let editor = element(value(app, kAXFocusedUIElementAttribute)),
               value(editor, kAXRoleAttribute) as? String == kAXTextAreaRole,
-              let selection = selectedRange(editor), selection.length == 0 else { return nil }
+              let selection = selectedRange(editor), forSlashMenu || selection.length == 0 else { return nil }
         AXUIElementSetMessagingTimeout(editor, 0.08)
         var settable = DarwinBoolean(false)
         guard AXUIElementIsAttributeSettable(editor, kAXSelectedTextRangeAttribute as CFString, &settable) == .success,
               settable.boolValue else { return nil }
         // Some editors expose marked text while an IME is composing. Never replace it.
-        if let marked = range(value(editor, "AXMarkedTextRange")), marked.length > 0 { return nil }
+        if !forSlashMenu, hasMarkedText(editor, selection: selection) { return nil }
         if let ranges = value(editor, kAXSelectedTextRangesAttribute) as? [Any], ranges.count > 1 { return nil }
         let start = max(0, selection.location - 512)
         guard let before = text(editor, range: NSRange(location: start, length: selection.location - start)) else { return nil }
@@ -94,7 +95,7 @@ enum NotesAccessibility {
             let beforeText = before as NSString
             let newline = beforeText.rangeOfCharacter(from: .newlines, options: .backwards)
             let line = beforeText.substring(from: newline.location == NSNotFound ? 0 : NSMaxRange(newline))
-            if ["-", "*"].contains(line) {
+            if MarkdownRule.isListMarker(line) {
                 // Inspect the rest of this paragraph before changing an existing line to a list.
                 // A truncated tail or an image anchor must not be treated as plain text.
                 let length = min(512, count - selection.location)
@@ -128,7 +129,56 @@ enum NotesAccessibility {
         let app = AXUIElementCreateApplication(foreground.processIdentifier)
         AXUIElementSetMessagingTimeout(app, 0.08)
         guard let editor = element(value(app, kAXFocusedUIElementAttribute)) else { return false }
-        return (range(value(editor, "AXMarkedTextRange"))?.length ?? 0) > 0
+        AXUIElementSetMessagingTimeout(editor, 0.08)
+        return hasMarkedText(editor, selection: selectedRange(editor)) || inputMethodHasCandidates()
+    }
+
+    private static func currentInputMethodBundleID() -> String? {
+        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+              let property = TISGetInputSourceProperty(source, kTISPropertyBundleID) else { return nil }
+        return Unmanaged<CFString>.fromOpaque(property).takeUnretainedValue() as String
+    }
+
+    private static func inputMethodWindows() -> [AXUIElement] {
+        guard let owner = currentInputMethodBundleID() else { return [] }
+        return NSRunningApplication.runningApplications(withBundleIdentifier: owner).flatMap { process in
+            let app = AXUIElementCreateApplication(process.processIdentifier)
+            AXUIElementSetMessagingTimeout(app, 0.04)
+            // Some input methods omit AXWindows but expose their candidate dialog
+            // as an application child instead.
+            return (value(app, kAXWindowsAttribute) as? [AXUIElement] ?? []) +
+                   (value(app, kAXChildrenAttribute) as? [AXUIElement] ?? [])
+        }
+    }
+
+    static func inputMethodHasCandidates() -> Bool {
+        // WeType does not expose AXMarkedTextRange or markedClauseSegment in Notes.
+        // Its candidate UI is a system dialog owned by the selected input method.
+        for window in inputMethodWindows() {
+            let subrole = value(window, kAXSubroleAttribute) as? String
+            let role = value(window, kAXRoleAttribute) as? String
+            if ([kAXSystemDialogSubrole, kAXSystemFloatingWindowSubrole, kAXFloatingWindowSubrole].contains(subrole ?? "") ||
+                role == kAXSystemDialogSubrole),
+               (value(window, kAXMinimizedAttribute) as? NSNumber)?.boolValue != true {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func hasMarkedText(_ editor: AXUIElement, selection: NSRange?) -> Bool {
+        if (range(value(editor, "AXMarkedTextRange"))?.length ?? 0) > 0 { return true }
+        // Some text areas expose composition attributes instead of a marked range.
+        // Check both sides of the selection because the IME caret can be inside it.
+        guard let selection else { return false }
+        for index in Set([max(0, selection.location - 1), selection.location]) {
+            if let text = parameter(editor, kAXAttributedStringForRangeParameterizedAttribute,
+                                    range: NSRange(location: index, length: 1)) as? NSAttributedString,
+               text.length > 0, text.attribute(.markedClauseSegment, at: 0, effectiveRange: nil) != nil {
+                return true
+            }
+        }
+        return false
     }
 
     static func attributes(_ element: AXUIElement, at index: Int) -> [NSAttributedString.Key: Any]? {

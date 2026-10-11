@@ -40,6 +40,13 @@ public enum Trigger: Equatable { case space, enter }
 
 /// Pure rules. Positions use UTF-16, matching the Accessibility text APIs.
 public enum MarkdownRule {
+    public static let checklistMarkers = ["[]", "[ ]", "- [ ]", "［］", "［ ］", "【】", "【 】"]
+
+    /// Markers that may change the current paragraph without replacing its text.
+    public static func isListMarker(_ line: String) -> Bool {
+        ["-", "*"].contains(line) || checklistMarkers.contains(line)
+    }
+
     public static func plan(
         beforeCaret: String, windowStart: Int = 0,
         trigger: Trigger, isMonospaced: Bool = false,
@@ -56,7 +63,7 @@ public enum MarkdownRule {
         let rightText = afterCaret as NSString
         let rightNewline = rightText.rangeOfCharacter(from: .newlines)
         let paragraphTail = rightNewline.location == NSNotFound ? afterCaret : rightText.substring(to: rightNewline.location)
-        let listBeforeText = rightBoundaryKnown && ["-", "*"].contains(line) && !paragraphTail.contains("\u{fffc}")
+        let listBeforeText = rightBoundaryKnown && isListMarker(line) && !paragraphTail.contains("\u{fffc}")
 
         if atStartKnown && (rightIsEmpty || listBeforeText),
            let style = paragraphStyle(for: line, trigger: trigger, isMonospaced: isMonospaced) {
@@ -107,9 +114,10 @@ public enum MarkdownRule {
         if !isMonospaced, trigger == .enter,
            match(#"^```[A-Za-z][A-Za-z0-9_+.-]{0,31}$"#, in: line) != nil { return .monostyled }
         guard !isMonospaced, trigger == .space else { return nil }
+        if checklistMarkers.contains(line) { return .checklist }
         let prefixes: [String: ParagraphStyle] = [
             "#": .title, "##": .heading, "###": .subheading,
-            ">": .quote, "[]": .checklist, "[ ]": .checklist, "- [ ]": .checklist,
+            ">": .quote,
             "*": .bullets, "-": .bullets, "1.": .numbered,
             "/title": .title, "/h1": .title,
             "/heading": .heading, "/h2": .heading,
