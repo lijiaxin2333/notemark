@@ -9,6 +9,8 @@ Environment: macOS 27.0.1 (26A434), Apple Silicon, Swift 6.4.
 - **48 tests, 0 failures** (`swift test`): Markdown rules, Slash search and selection, UTF-16 ranges, font-size preservation, RTF, automatic startup/pause behavior, and empty-heading cancellation. `-` + Space maps to a bullet list; empty-heading cancellation produces a zero-length Body edit.
 - Release build, `--self-check`, signature verification, and ZIP integrity check for **0.1.5**, signed with the configured Apple Development certificate.
 - Shell syntax checks and installer preflight for migration from the old ad-hoc build. Local signing configuration is ignored by Git.
+- Two builds with different code-directory hashes satisfy each other's signing requirements. Installer preflight rejects ad-hoc builds, incompatible signing identifiers, and tampered resources without changing the installed app.
+- Installed **0.1.5** at `/Applications/NoteMark.app` with the update script; the old app was backed up, the new signature verified, and the app restarted. A subsequent compatibility preflight passed.
 - Offscreen rendering and visual review of the app's own setup and Slash views.
 
 `--diagnose` reported permissions available in the development process. This does not verify permissions for a separately launched app.
