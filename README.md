@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 Write Markdown directly in Apple Notes. NoteMark converts it into native Notes formatting.
 
-**Version: 0.1.4 beta** · macOS 14+ · Current build: Apple Silicon
+**Version: 0.1.5 beta** · macOS 14+ · Current build: Apple Silicon
 
 ## Install and grant permissions
 
@@ -45,7 +45,7 @@ Slash commands: `/h1`, `/h2`, `/h3`, `/body`, `/code`, `/quote`, `/checklist`, `
 
 ## Troubleshooting
 
-- Check permissions for the copy in **Applications**, then quit and reopen NoteMark. Rebuilt apps may need permission again.
+- Check permissions for the copy in **Applications**, then quit and reopen NoteMark. Changing the signing identity may require permission again.
 - If paused, resume conversion from the menu bar. If the input connection failed, use the retry action in that menu.
 - Try an empty line in a new, unlocked note. Search fields, selected text, and code paragraphs do not trigger normal Markdown conversion.
 
@@ -56,16 +56,40 @@ Slash commands: `/h1`, `/h2`, `/h3`, `/body`, `/code`, `/quote`, `/checklist`, `
 - Whole-note conversion, nested Markdown, and Markdown image insertion are not supported. Paragraphs containing images are skipped.
 - Tested builds use macOS 27.0.1 and Apple Silicon. Real Notes input, IME behavior, and rapid typing still need manual testing. See [validation details](VALIDATION.md).
 
+## Update
+
+Quit NoteMark and replace the app at **/Applications/NoteMark.app** with a build signed using the same identity. For local builds, run:
+
+```sh
+sh scripts/build.sh
+sh scripts/install.sh
+```
+
+The installer checks signature compatibility, backs up the installed app, quits it, replaces it at the same path, and reopens it. To check compatibility without installing, run `sh scripts/install.sh --check`.
+
+Permissions should carry over between compatible signed versions. The first update from an old ad-hoc build to a certificate-signed build requires permission again. Keep the signing identity and bundle identifier unchanged. See [Apple's explanation of code identity](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+
+This is a local update script; there is no in-app update downloader yet.
+
 ## Build
 
 Requires macOS 14+ and an Xcode/Swift toolchain. No third-party dependencies.
+
+Configure a signing identity once. Copy its 40-character SHA-1 from the first command:
+
+```sh
+security find-identity -v -p codesigning
+sh scripts/configure-signing.sh CERTIFICATE_SHA1
+```
+
+The selection is stored in `.signing-identity`, which Git ignores. The certificate and private key stay in your keychain. macOS may ask you to allow `codesign` to use the private key; approve it in the system Keychain dialog. Use Apple Development for local development; public releases need [Developer ID signing and notarization](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
 
 ```sh
 swift test
 sh scripts/build.sh
 ```
 
-Output: `dist/NoteMark.app` and `dist/NoteMark-0.1.4.zip`. The build uses ad-hoc signing.
+Output: `dist/NoteMark.app` and `dist/NoteMark-0.1.5.zip`. Builds use the configured certificate; they fail if no identity is configured. For a temporary ad-hoc test build, use `NOTEMARK_SIGNING_IDENTITY=- sh scripts/build.sh`; the installer rejects these builds.
 
 ```sh
 dist/NoteMark.app/Contents/MacOS/NoteMark --self-check

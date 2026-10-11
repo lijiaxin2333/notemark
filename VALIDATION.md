@@ -7,7 +7,8 @@ Environment: macOS 27.0.1 (26A434), Apple Silicon, Swift 6.4.
 ## Passed
 
 - **48 tests, 0 failures** (`swift test`): Markdown rules, Slash search and selection, UTF-16 ranges, font-size preservation, RTF, automatic startup/pause behavior, and empty-heading cancellation. `-` + Space maps to a bullet list; empty-heading cancellation produces a zero-length Body edit.
-- Release build, `--self-check`, signature verification, and ZIP integrity check for **0.1.4**.
+- Release build, `--self-check`, signature verification, and ZIP integrity check for **0.1.5**, signed with the configured Apple Development certificate.
+- Shell syntax checks and installer preflight for migration from the old ad-hoc build. Local signing configuration is ignored by Git.
 - Offscreen rendering and visual review of the app's own setup and Slash views.
 
 `--diagnose` reported permissions available in the development process. This does not verify permissions for a separately launched app.
@@ -27,6 +28,7 @@ Use a new test note after granting permissions. These checks have **not** been c
 | Test IMEs, rapid typing, and undo | No lost text or unexpected conversion |
 | Copy before and during inline conversion | Clipboard restored; new copies preserved |
 | Switch apps; try search fields, tables, and locked notes | No unintended edits |
+| Grant permissions to the certificate-signed build, then install a later compatible build | Accessibility and Input Monitoring permissions remain available; this retention has not been tested yet |
 
 Also check different account types, shared notes, multiple displays, and Slash menus near window edges.
 

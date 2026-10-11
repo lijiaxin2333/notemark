@@ -4,7 +4,7 @@
 
 在 Apple 备忘录中直接写 Markdown，NoteMark 会将标记转换为备忘录原生格式。
 
-**版本：0.1.4 测试版** · macOS 14+ · 当前安装包适用于 Apple Silicon
+**版本：0.1.5 测试版** · macOS 14+ · 当前安装包适用于 Apple Silicon
 
 ## 安装与权限配置
 
@@ -45,7 +45,7 @@ Slash 命令：`/h1`、`/h2`、`/h3`、`/body`、`/code`、`/quote`、`/checklis
 
 ## 无法转换时
 
-- 检查 **应用程序** 中的 NoteMark 是否已授权，再退出并重新打开。重新编译后可能需要再次授权。
+- 检查 **应用程序** 中的 NoteMark 是否已授权，再退出并重新打开。更换签名身份时可能需要再次授权。
 - 已暂停时点击菜单栏中的 **恢复 Markdown 转换**；连接失败时点击 **重试输入连接**。
 - 先在新建、未锁定笔记的空行试用。搜索框、选中文字和代码段落不会触发普通 Markdown 转换。
 
@@ -56,16 +56,40 @@ Slash 命令：`/h1`、`/h2`、`/h3`、`/body`、`/code`、`/quote`、`/checklis
 - 暂不支持整篇转换、嵌套 Markdown 和 Markdown 图片插入；包含图片的当前段落会跳过转换。
 - 已在 macOS 27.0.1 / Apple Silicon 编译；真实备忘录输入、输入法和快速连续输入仍需手动验证。详见[验证说明](VALIDATION.zh-CN.md)。
 
+## 更新
+
+退出 NoteMark，使用相同签名身份的新版本替换 **/Applications/NoteMark.app**。本地编译时运行：
+
+```sh
+sh scripts/build.sh
+sh scripts/install.sh
+```
+
+安装脚本会检查签名兼容性、备份旧 App、退出程序，在原路径替换并重新打开。只检查、不安装时，运行 `sh scripts/install.sh --check`。
+
+同签名身份的兼容版本应能沿用权限。首次从旧的 ad-hoc 签名版本换成证书签名版本，仍需重新授权一次。后续请保持签名身份和 Bundle ID 不变。详见 [Apple 对代码身份的说明](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)。
+
+目前提供本地更新脚本，尚未加入 App 内下载更新。
+
 ## 编译
 
 需要 macOS 14+ 和 Xcode/Swift 工具链，无第三方依赖。
+
+先配置一次签名身份。从第一条命令输出中复制证书的 40 位 SHA-1：
+
+```sh
+security find-identity -v -p codesigning
+sh scripts/configure-signing.sh CERTIFICATE_SHA1
+```
+
+选择保存在 Git 忽略的 `.signing-identity` 中，证书和私钥仍在钥匙串。macOS 可能要求允许 `codesign` 使用私钥，请在系统钥匙串弹窗中授权。本机开发可使用 Apple Development；公开分发需要 [Developer ID 签名和公证](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/)。
 
 ```sh
 swift test
 sh scripts/build.sh
 ```
 
-输出：`dist/NoteMark.app` 和 `dist/NoteMark-0.1.4.zip`。构建使用本地 ad-hoc 签名。
+输出：`dist/NoteMark.app` 和 `dist/NoteMark-0.1.5.zip`。构建使用已配置的证书；未配置时会报错。临时 ad-hoc 测试构建可运行 `NOTEMARK_SIGNING_IDENTITY=- sh scripts/build.sh`，安装脚本会拒绝此类构建。
 
 ```sh
 dist/NoteMark.app/Contents/MacOS/NoteMark --self-check
