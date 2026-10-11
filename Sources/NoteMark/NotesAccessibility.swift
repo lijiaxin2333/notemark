@@ -187,17 +187,155 @@ enum NotesAccessibility {
               attributed.length > 0 else { return nil }
         let raw = attributed.attributes(at: 0, effectiveRange: nil)
         if raw[.font] is NSFont { return raw }
-        // Accessibility attributed strings can use AXFont dictionaries instead of NSFont.
-        let dictionary = raw[NSAttributedString.Key("AXFont")] as? [String: Any]
-        guard let dict = dictionary,
-              let size = (dict["AXFontSize"] as? NSNumber)?.doubleValue,
-              size > 0, size < 200,
-              let name = dict["AXFontName"] as? String,
-              let font = NSFont(name: name, size: size) else { return nil }
+        guard let font = accessibilityFont(raw) else { return nil }
         var result: [NSAttributedString.Key: Any] = [.font: font]
         if let color = raw[.foregroundColor] as? NSColor { result[.foregroundColor] = color }
         if let paragraph = raw[.paragraphStyle] as? NSParagraphStyle { result[.paragraphStyle] = paragraph }
         return result
+    }
+
+    private static func accessibilityFont(_ attributes: [NSAttributedString.Key: Any]) -> NSFont? {
+        if let font = attributes[.font] as? NSFont { return font }
+        // Accessibility attributed strings can use AXFont dictionaries instead of NSFont.
+        guard let dict = attributes[NSAttributedString.Key("AXFont")] as? [String: Any],
+              let size = (dict["AXFontSize"] as? NSNumber)?.doubleValue, size > 0, size < 200,
+              let name = dict["AXFontName"] as? String else { return nil }
+        return NSFont(name: name, size: size)
+    }
+
+    private static func monospacedState(_ attributes: [NSAttributedString.Key: Any]) -> Bool? {
+        guard let font = accessibilityFont(attributes) else { return nil }
+        if NSFontManager.shared.traits(of: font).contains(.fixedPitchFontMask) || font.isFixedPitch { return true }
+        // A proportional CJK/emoji fallback does not establish a Body boundary.
+        // Only Notes' system text fonts confirm it without a code separator.
+        if font.fontName.hasPrefix(".AppleSystemUIFont") ||
+            (font.familyName != nil && font.familyName == NSFont.systemFont(ofSize: font.pointSize).familyName) { return false }
+        return nil
+    }
+
+    private static func codeParagraphState(_ line: NSRange, styled: NSAttributedString,
+                                           source: NSString, endsAtDocumentBoundary: Bool) -> Bool? {
+        // No separator or character exists for the empty terminal paragraph.
+        // It cannot inherit the previous paragraph's code font.
+        if line.length == 0, line.location == source.length { return endsAtDocumentBoundary ? false : nil }
+        func fontState(_ index: Int) -> Bool? {
+            guard index >= 0, index < styled.length else { return nil }
+            return monospacedState(styled.attributes(at: index, effectiveRange: nil))
+        }
+        let end = NSMaxRange(line)
+        let hasSeparator = end < source.length && UnicodeScalar(source.character(at: end)).map({ CharacterSet.newlines.contains($0) }) == true
+        return CodeBlockContext.codeParagraphState(line, separatorIsCode: hasSeparator ? fontState(end) : nil,
+                                                  fontIsCode: fontState)
+    }
+
+    static func codeBlock(_ snapshot: EditorSnapshot) -> CodeBlockContext? {
+        guard let count = (value(snapshot.element, kAXNumberOfCharactersAttribute) as? NSNumber)?.intValue,
+              snapshot.selection.location <= count else { return nil }
+        // A truncated code block is never treated as empty. Read text and font
+        // attributes together so neighboring Body paragraphs stay outside it.
+        let start = max(0, snapshot.selection.location - 4096)
+        let end = min(count, snapshot.selection.location + 4096)
+        let range = NSRange(location: start, length: end - start)
+        guard let sample = text(snapshot.element, range: range) else { return nil }
+        let styled: NSAttributedString?
+        if range.length == 0 { styled = NSAttributedString(string: "") }
+        else { styled = parameter(snapshot.element, kAXAttributedStringForRangeParameterizedAttribute, range: range) as? NSAttributedString }
+        guard let styled, styled.length == range.length else { return nil }
+        return CodeBlockContext.read(text: sample, windowStart: start, documentLength: count,
+            caret: snapshot.selection.location, currentLineIsCode: true, isCodeLine: { line in
+                codeParagraphState(line, styled: styled, source: sample as NSString, endsAtDocumentBoundary: end == count)
+            })
+    }
+
+    /// Format and range metadata only. Never serialize the sampled note text.
+    static func cancellationDiagnostics(_ snapshot: EditorSnapshot) -> [String: Any] {
+        let count = (value(snapshot.element, kAXNumberOfCharactersAttribute) as? NSNumber)?.intValue ?? -1
+        let context = codeBlock(snapshot)
+        var result: [String: Any] = [
+            "caret": snapshot.selection.location, "selectionLength": snapshot.selection.length,
+            "documentLength": count, "contextStart": context?.range.location ?? -1,
+            "contextLength": context?.range.length ?? -1,
+            "contextEmpty": context?.text.unicodeScalars.allSatisfy({ CharacterSet.newlines.contains($0) }) ?? false
+        ]
+        let start = max(0, snapshot.selection.location - 128)
+        let end = min(count, snapshot.selection.location + 128)
+        guard end >= start, let sample = text(snapshot.element, range: NSRange(location: start, length: end - start)) else { return result }
+        let source = sample as NSString
+        let styled = parameter(snapshot.element, kAXAttributedStringForRangeParameterizedAttribute,
+                               range: NSRange(location: start, length: end - start)) as? NSAttributedString
+        var lines: [[String: Any]] = []
+        var lineStart = 0
+        func fontName(_ index: Int) -> String {
+            guard let styled, index >= start, index - start < styled.length else { return "unavailable" }
+            let attributes = styled.attributes(at: index - start, effectiveRange: nil)
+            return accessibilityFont(attributes)?.fontName ??
+                (attributes[NSAttributedString.Key("AXFont")] as? [String: Any])?["AXFontName"] as? String ?? "unavailable"
+        }
+        for index in 0...source.length {
+            guard index == source.length || UnicodeScalar(source.character(at: index)).map({ CharacterSet.newlines.contains($0) }) == true else { continue }
+            lines.append(["start": start + lineStart, "length": index - lineStart,
+                          "firstFont": fontName(start + lineStart),
+                          "lastFont": fontName(start + max(lineStart, index - 1)),
+                          "separatorFont": fontName(start + index)])
+            lineStart = index + 1
+        }
+        result["paragraphs"] = Array(lines.suffix(12))
+        return result
+    }
+
+    static func hasCodeContent(_ snapshot: EditorSnapshot) -> Bool {
+        guard snapshot.selection.length == 0 else { return false }
+        let before = snapshot.before as NSString
+        let newline = before.rangeOfCharacter(from: .newlines, options: .backwards)
+        let start = newline.location == NSNotFound ? 0 : NSMaxRange(newline)
+        guard snapshot.windowStart == 0 || newline.location != NSNotFound,
+              start < before.length else { return false }
+        // An inline code fragment at the end of ordinary prose must not arm a
+        // paragraph cancellation. Check the paragraph's first character too.
+        return currentParagraphCodeState(snapshot) == true
+    }
+
+    static func isEmptyMonospacedParagraph(_ snapshot: EditorSnapshot) -> Bool {
+        guard snapshot.selection.length == 0, snapshot.rightBoundaryKnown,
+              snapshot.after.isEmpty || snapshot.after.first?.isNewline == true else { return false }
+        let before = snapshot.before as NSString
+        let newline = before.rangeOfCharacter(from: .newlines, options: .backwards)
+        guard snapshot.windowStart == 0 || newline.location != NSNotFound,
+              (newline.location == NSNotFound ? 0 : NSMaxRange(newline)) == before.length,
+              let font = attributes(snapshot.element, at: snapshot.selection.location)?[.font] as? NSFont else { return false }
+        // Inspect the empty paragraph's own separator, never the character to
+        // its left: it may belong to a Body paragraph after repeated deletions.
+        return NSFontManager.shared.traits(of: font).contains(.fixedPitchFontMask) || font.isFixedPitch
+    }
+
+    static func currentLineIsMonospaced(_ snapshot: EditorSnapshot) -> Bool {
+        if let code = currentParagraphCodeState(snapshot) { return code }
+        let before = snapshot.before as NSString
+        let newline = before.rangeOfCharacter(from: .newlines, options: .backwards)
+        let start = newline.location == NSNotFound ? 0 : NSMaxRange(newline)
+        guard snapshot.windowStart == 0 || newline.location != NSNotFound else { return false }
+        if let font = attributes(snapshot.element, at: snapshot.windowStart + start)?[.font] as? NSFont {
+            return NSFontManager.shared.traits(of: font).contains(.fixedPitchFontMask) || font.isFixedPitch
+        }
+        return snapshot.isMonospaced // Empty final paragraph has no character at its start.
+    }
+
+    private static func currentParagraphCodeState(_ snapshot: EditorSnapshot) -> Bool? {
+        let before = snapshot.before as NSString
+        let newline = before.rangeOfCharacter(from: .newlines, options: .backwards)
+        guard snapshot.windowStart == 0 || newline.location != NSNotFound,
+              let count = (value(snapshot.element, kAXNumberOfCharactersAttribute) as? NSNumber)?.intValue else { return nil }
+        let start = snapshot.windowStart + (newline.location == NSNotFound ? 0 : NSMaxRange(newline))
+        let length = min(4096, count - start)
+        guard length > 0, let sample = text(snapshot.element, range: NSRange(location: start, length: length)),
+              let styled = parameter(snapshot.element, kAXAttributedStringForRangeParameterizedAttribute,
+                                     range: NSRange(location: start, length: length)) as? NSAttributedString,
+              styled.length == length else { return nil }
+        let source = sample as NSString
+        let end = source.rangeOfCharacter(from: .newlines)
+        guard end.location != NSNotFound || start + length == count else { return nil }
+        return codeParagraphState(NSRange(location: 0, length: end.location == NSNotFound ? length : end.location),
+                                  styled: styled, source: source, endsAtDocumentBoundary: start + length == count)
     }
 
     static func caretBounds(_ snapshot: EditorSnapshot) -> CGRect? {

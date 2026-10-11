@@ -11,6 +11,36 @@ enum RuntimeStatus {
     private static var slashVisible = false
     private static var slashComposing = false
     private static var slashMatchCount = 0
+    private static var trackedParagraphStyle: String?
+    private static var paragraphCancellationReady = false
+    private static var paragraphObservation: [String: Bool] = [:]
+    private static var cancellationAttempt = "none"
+    private static var cancellationTrace: [[String: Any]] = []
+
+    static func recordCancellation(_ phase: String, metrics: [String: Any]) {
+        var entry = metrics
+        entry["phase"] = phase
+        cancellationTrace.append(entry)
+        cancellationTrace = Array(cancellationTrace.suffix(24))
+        lastReport = "" // Every deletion step matters, even when its flags agree.
+        save(running: lastRunning, status: lastStatus)
+    }
+
+    static func saveParagraphObservation(_ observation: [String: Bool]) {
+        paragraphObservation = observation
+        save(running: lastRunning, status: lastStatus)
+    }
+
+    static func saveCancellationAttempt(_ outcome: String) {
+        cancellationAttempt = outcome
+        save(running: lastRunning, status: lastStatus)
+    }
+
+    static func saveParagraph(style: String?, ready: Bool) {
+        trackedParagraphStyle = style
+        paragraphCancellationReady = ready
+        save(running: lastRunning, status: lastStatus)
+    }
 
     static func saveSlash(visible: Bool, composing: Bool, matchCount: Int) {
         slashVisible = visible
@@ -22,7 +52,8 @@ enum RuntimeStatus {
     static func save(running: Bool, status: String) {
         lastRunning = running
         lastStatus = status
-        let report = "\(running)|\(status)|\(AXIsProcessTrusted())|\(CGPreflightListenEventAccess())|\(slashVisible)|\(slashComposing)|\(slashMatchCount)"
+        let observation = paragraphObservation.keys.sorted().map { "\($0):\(paragraphObservation[$0]!)" }.joined(separator: "|")
+        let report = "\(running)|\(status)|\(AXIsProcessTrusted())|\(CGPreflightListenEventAccess())|\(slashVisible)|\(slashComposing)|\(slashMatchCount)|\(trackedParagraphStyle ?? "none")|\(paragraphCancellationReady)|\(observation)|\(cancellationAttempt)"
         guard report != lastReport else { return }
         let fields: [String: Any] = [
             "pid": ProcessInfo.processInfo.processIdentifier,
@@ -34,6 +65,11 @@ enum RuntimeStatus {
             "slashVisible": slashVisible,
             "slashComposing": slashComposing,
             "slashMatchCount": slashMatchCount,
+            "trackedParagraphStyle": trackedParagraphStyle ?? "none",
+            "paragraphCancellationReady": paragraphCancellationReady,
+            "lastParagraphObservation": paragraphObservation,
+            "lastCancellationAttempt": cancellationAttempt,
+            "cancellationTrace": cancellationTrace,
             "updatedAt": ISO8601DateFormatter().string(from: Date())
         ]
         do {

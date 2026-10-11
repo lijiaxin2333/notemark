@@ -21,7 +21,9 @@ final class ConversionEngine {
     private var observedApplication: AXUIElement?
     private var observedEditor: AXUIElement?
     private var workspaceObserver: NSObjectProtocol?
-    private var emptyHeading: (snapshot: EditorSnapshot, cancellation: EmptyHeadingCancellation)?
+    private var emptyParagraph: (snapshot: EditorSnapshot, cancellation: EmptyParagraphCancellation)? {
+        didSet { RuntimeStatus.saveParagraph(style: emptyParagraph?.cancellation.style.rawValue, ready: false) }
+    }
 
     init() {
         slashPanel.onChoose = { [weak self] command in
@@ -58,7 +60,7 @@ final class ConversionEngine {
                                                                                object: nil, queue: .main) { [weak self] _ in
             if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != NotesAccessibility.bundleID {
                 self?.dismissSlash()
-                self?.emptyHeading = nil
+                self?.emptyParagraph = nil
             } else {
                 self?.observeNotesEditor()
             }
@@ -68,7 +70,7 @@ final class ConversionEngine {
     }
 
     func stop() {
-        emptyHeading = nil
+        emptyParagraph = nil
         dismissSlash()
         if let observer = notesObserver {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
@@ -95,7 +97,7 @@ final class ConversionEngine {
         }
         guard event.getIntegerValueField(.eventSourceUserData) != Keyboard.marker else { return false }
         guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == NotesAccessibility.bundleID else {
-            emptyHeading = nil
+            emptyParagraph = nil
             recentInput = ""
             dismissSlash()
             return false
@@ -106,12 +108,11 @@ final class ConversionEngine {
             return true
         }
         if type == .scrollWheel {
-            emptyHeading = nil
             if slashTracking, NotesAccessibility.isComposing() { scheduleSlashUpdate(); return false }
             dismissSlash(); return false
         }
         if [.leftMouseDown, .rightMouseDown, .otherMouseDown].contains(type) {
-            emptyHeading = nil
+            emptyParagraph = nil
             if slashTracking, NotesAccessibility.isComposing() { scheduleSlashUpdate(); return false }
             if !slashPanel.containsMouse() { recentInput = ""; dismissSlash() }
             return false
@@ -127,21 +128,38 @@ final class ConversionEngine {
         }
         if running, type == .keyDown {
             let modifiers = event.flags.intersection([.maskShift, .maskCommand, .maskControl, .maskAlternate])
-            let cancelKey = ([51, 53].contains(key) && modifiers.isEmpty) ||
-                            (key == 40 && modifiers == .maskControl)
-            if cancelKey, !slashPanel.isVisible, let heading = emptyHeading,
-               !NotesAccessibility.isComposing(), NotesAccessibility.sameFocus(heading.snapshot),
+            let controlDeletion = [2, 4, 40].contains(key) && modifiers == .maskControl // Ctrl+D/H/K
+            let controlNavigation = [0, 14, 3, 11, 35, 45].contains(key) && modifiers == .maskControl // Ctrl+A/E/F/B/P/N
+            let cancelKey = ([51, 117, 53].contains(key) && modifiers.isEmpty) || controlDeletion
+            let cancellationIntent: CodeBlockCancellationIntent = key == 53 ? .escape :
+                [51, 4].contains(key) ? .backwardDeletion : .forwardDeletion
+            if cancelKey, !NotesAccessibility.isComposing() {
+                // Read the current line before cancellation too: a rapid Return
+                // and Backspace can arrive before the AX observer follows it.
+                refreshEmptyParagraph()
+                RuntimeStatus.saveCancellationAttempt(emptyParagraph == nil ? "untracked" : "not-empty-or-unavailable")
+            }
+            if cancelKey, !slashPanel.isVisible, let paragraph = emptyParagraph,
+               !NotesAccessibility.isComposing(), NotesAccessibility.sameFocus(paragraph.snapshot),
                let snapshot = NotesAccessibility.snapshot(),
-               let plan = heading.cancellation.plan(beforeCaret: snapshot.before, windowStart: snapshot.windowStart,
-                                                    afterCaret: snapshot.after, selection: snapshot.selection) {
-                emptyHeading = nil
+               let plan = cancellationPlan(paragraph.cancellation, snapshot: snapshot,
+                                           intent: cancellationIntent) {
+                RuntimeStatus.saveCancellationAttempt("scheduled")
+                emptyParagraph = nil
                 recentInput = ""
                 dismissSlash()
-                beginConversion(plan, snapshot: snapshot, original: event.copy(), cancellation: heading.cancellation)
+                beginConversion(plan, snapshot: snapshot, original: event.copy(), cancellation: paragraph.cancellation,
+                                cancellationIntent: cancellationIntent)
                 return true
             }
-            // Typing, navigation, and other shortcuts end the initial empty-heading state.
-            emptyHeading = nil
+            // Keep the session through text input and native deletions. Undo and
+            // formatting shortcuts may change the style independently of NoteMark.
+            let endsParagraph = [36, 76].contains(key) && emptyParagraph?.cancellation.style != .monostyled
+            if endsParagraph || key == 53 ||
+                (!controlDeletion && !controlNavigation &&
+                 !modifiers.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty) {
+                emptyParagraph = nil
+            }
         }
         if type == .keyDown, !event.flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty {
             dismissSlash()
@@ -272,12 +290,18 @@ final class ConversionEngine {
     }
 
     private func beginConversion(_ plan: EditPlan, snapshot: EditorSnapshot, original: CGEvent?,
-                                 cancellation: EmptyHeadingCancellation? = nil) {
+                                 cancellation: EmptyParagraphCancellation? = nil,
+                                 cancellationIntent: CodeBlockCancellationIntent = .escape) {
         // Menu traversal and editing run outside the event-tap callback.
         busy = true
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let converted = await self.apply(plan, snapshot: snapshot, cancellation: cancellation)
+            if cancellation != nil, NotesAccessibility.sameFocus(snapshot) {
+                RuntimeStatus.recordCancellation("before-\(cancellationIntent)", metrics: NotesAccessibility.cancellationDiagnostics(snapshot))
+            }
+            let converted = await self.apply(plan, snapshot: snapshot, cancellation: cancellation,
+                                             cancellationIntent: cancellationIntent)
+            if cancellation != nil, !converted { RuntimeStatus.saveCancellationAttempt("revalidation-or-command-failed") }
             if !converted, let original, NotesAccessibility.sameFocus(snapshot),
                NotesAccessibility.setSelection(snapshot.element, range: snapshot.selection) {
                 Keyboard.replay(original, pid: snapshot.pid)
@@ -290,7 +314,7 @@ final class ConversionEngine {
         let queued = buffered
         buffered.removeAll()
         busy = false
-        // Reprocess queued user input so an immediate heading cancellation is recognized.
+        // Reprocess queued user input so an immediate empty-paragraph cancellation is recognized.
         for event in queued { Keyboard.replay(event, reprocess: true) }
     }
 
@@ -348,6 +372,7 @@ final class ConversionEngine {
             }
         }
         dismissSlash()
+        emptyParagraph = nil
         slashSuppressed = false
         observedEditor = editor
         AXUIElementSetMessagingTimeout(editor, 0.08)
@@ -361,10 +386,58 @@ final class ConversionEngine {
         guard running, !busy,
               NSWorkspace.shared.frontmostApplication?.bundleIdentifier == NotesAccessibility.bundleID else { return }
         bindObservedEditor()
+        if !NotesAccessibility.isComposing() { refreshEmptyParagraph() }
         // IME commits and pasted text need not contain a usable raw slash key event.
         // Observe the editor so committed Chinese search resumes without another key.
         guard !slashSuppressed else { return }
         scheduleSlashUpdate()
+    }
+
+    private func refreshEmptyParagraph() {
+        guard let current = NotesAccessibility.snapshot(forSlashMenu: true) else { return }
+        defer {
+            let plan = emptyParagraph.flatMap { cancellationPlan($0.cancellation, snapshot: current) }
+            let context = NotesAccessibility.codeBlock(current)
+            RuntimeStatus.saveParagraphObservation([
+                "selectionEmpty": current.selection.length == 0,
+                "previousCharacterMonospaced": current.isMonospaced,
+                "currentLineMonospaced": NotesAccessibility.currentLineIsMonospaced(current),
+                "codeContent": NotesAccessibility.hasCodeContent(current),
+                "emptyParagraphMonospaced": NotesAccessibility.isEmptyMonospacedParagraph(current),
+                "codeContextAvailable": context != nil,
+                "codeContextEmpty": context?.cancellationPlan(selection: current.selection) != nil,
+                "codeBackwardDeletionReady": context?.cancellationPlan(selection: current.selection, intent: .backwardDeletion) != nil,
+                "codeForwardDeletionReady": context?.cancellationPlan(selection: current.selection, intent: .forwardDeletion) != nil,
+                "tracked": emptyParagraph != nil
+            ])
+            RuntimeStatus.saveParagraph(style: emptyParagraph?.cancellation.style.rawValue, ready: plan != nil)
+        }
+        if let paragraph = emptyParagraph, !NotesAccessibility.sameFocus(paragraph.snapshot) { emptyParagraph = nil }
+        guard let paragraph = emptyParagraph else {
+            if let recovered = EmptyParagraphCancellation.recoverCode(beforeCaret: current.before,
+                windowStart: current.windowStart, selection: current.selection,
+                isMonospacedParagraph: NotesAccessibility.hasCodeContent(current),
+                isEmptyMonospacedParagraph: NotesAccessibility.isEmptyMonospacedParagraph(current)) {
+                emptyParagraph = (current, recovered)
+            }
+            return
+        }
+        guard paragraph.cancellation.containsCaret(beforeCaret: current.before, windowStart: current.windowStart,
+                                                   selection: current.selection) == false else { return }
+        if let following = paragraph.cancellation.followingCodeCaret(beforeCaret: current.before,
+            windowStart: current.windowStart, selection: current.selection,
+            isMonospaced: NotesAccessibility.currentLineIsMonospaced(current)) {
+            emptyParagraph = (current, following)
+        } else { emptyParagraph = nil }
+    }
+
+    private func cancellationPlan(_ cancellation: EmptyParagraphCancellation, snapshot: EditorSnapshot,
+                                  intent: CodeBlockCancellationIntent = .escape) -> EditPlan? {
+        if cancellation.style == .monostyled {
+            return NotesAccessibility.codeBlock(snapshot)?.cancellationPlan(selection: snapshot.selection, intent: intent)
+        }
+        return cancellation.plan(beforeCaret: snapshot.before, windowStart: snapshot.windowStart,
+                                 afterCaret: snapshot.after, selection: snapshot.selection)
     }
 
     private func updateSlashMenu() {
@@ -426,7 +499,8 @@ final class ConversionEngine {
         return true
     }
 
-    private func apply(_ plan: EditPlan, snapshot: EditorSnapshot, cancellation: EmptyHeadingCancellation?) async -> Bool {
+    private func apply(_ plan: EditPlan, snapshot: EditorSnapshot, cancellation: EmptyParagraphCancellation?,
+                       cancellationIntent: CodeBlockCancellationIntent = .escape) async -> Bool {
         guard NotesAccessibility.sameFocus(snapshot),
               NotesAccessibility.selectedRange(snapshot.element) == snapshot.selection,
               NotesAccessibility.text(snapshot.element, range: plan.range) == plan.original else { return false }
@@ -440,31 +514,72 @@ final class ConversionEngine {
             }
             if let cancellation {
                 guard let current = NotesAccessibility.snapshot(), NotesAccessibility.sameFocus(snapshot),
-                      cancellation.plan(beforeCaret: current.before, windowStart: current.windowStart,
-                                        afterCaret: current.after, selection: current.selection) == plan else { return false }
+                      cancellationPlan(cancellation, snapshot: current, intent: cancellationIntent) == plan else { return false }
             }
+            // Body changes the font/list style but leaves Notes' quote container.
+            let quoteCommand: AXUIElement?
+            if cancellation?.style == .quote {
+                guard let quote = NotesAccessibility.command(for: .quote, pid: snapshot.pid) else { return false }
+                quoteCommand = quote
+            } else { quoteCommand = nil }
             guard NotesAccessibility.selectedRange(snapshot.element) == snapshot.selection,
                   NotesAccessibility.sameFocus(snapshot),
                   NotesAccessibility.setSelection(snapshot.element, range: plan.range) else {
                 onStatus?(cancellation != nil ? "无法切换正文，已保留原按键操作" : "当前编辑器没有提供可用的格式命令，已保留 Markdown")
                 return false
             }
-            if plan.range.length > 0 {
+            if plan.range.length > 0, cancellation == nil {
                 Keyboard.post(51, pid: snapshot.pid) // Native delete, preserving the surrounding note.
                 guard await waitForSelection(NSRange(location: plan.range.location, length: 0), snapshot: snapshot) else {
                     onStatus?("编辑器响应未确认；请检查刚才的输入，必要时按 ⌘Z 撤销")
                     return true // Do not duplicate the swallowed delimiter after a partial edit.
                 }
             }
+            if let quoteCommand {
+                guard NotesAccessibility.sameFocus(snapshot),
+                      AXUIElementPerformAction(quoteCommand, kAXPressAction as CFString) == .success else { return false }
+            }
             guard NotesAccessibility.sameFocus(snapshot),
                   AXUIElementPerformAction(command, kAXPressAction as CFString) == .success else {
-                onStatus?(cancellation != nil ? "正文格式未切换，已保留原按键操作" : "原生格式命令未执行；可按 ⌘Z 恢复标记")
-                return plan.range.length > 0
+                onStatus?(quoteCommand != nil ? "引用已退出，但正文命令未执行" : cancellation != nil
+                    ? "正文格式未切换，已保留原按键操作" : "原生格式命令未执行；可按 ⌘Z 恢复标记")
+                return (plan.range.length > 0 && cancellation == nil) || quoteCommand != nil
             }
-            if running, let cancellation = EmptyHeadingCancellation(style: style, paragraphStart: plan.range.location) {
-                emptyHeading = (snapshot, cancellation)
-            } else { emptyHeading = nil }
-            onStatus?(cancellation != nil ? "已恢复正文 · 空标题已取消" : style == .checklist
+            if cancellation != nil {
+                if let current = NotesAccessibility.snapshot(forSlashMenu: true) {
+                    RuntimeStatus.recordCancellation("after-body", metrics: NotesAccessibility.cancellationDiagnostics(current))
+                }
+                if cancellation?.style == .monostyled {
+                    for terminal in CodeBlockContext.bodyFormattingSelections(for: plan).dropFirst() {
+                        guard NotesAccessibility.sameFocus(snapshot),
+                              NotesAccessibility.setSelection(snapshot.element, range: terminal),
+                              let body = NotesAccessibility.command(for: .body, pid: snapshot.pid),
+                              AXUIElementPerformAction(body, kAXPressAction as CFString) == .success else {
+                            _ = await restoreCancellationCaret(snapshot)
+                            refreshEmptyParagraph()
+                            RuntimeStatus.saveCancellationAttempt("terminal-paragraph-failed")
+                            onStatus?("部分空行已恢复正文；末尾段落未确认，请再按一次取消键")
+                            return true // Body has already changed part of the selection.
+                        }
+                    }
+                }
+                // AXPress can return before Notes' format action moves selection.
+                // Keep later delete events buffered until the caret stays put.
+                guard await restoreCancellationCaret(snapshot) else {
+                    emptyParagraph = nil
+                    RuntimeStatus.saveCancellationAttempt("caret-restoration-unconfirmed")
+                    onStatus?("格式已切换正文，但光标位置未确认；请检查光标后再继续删除")
+                    return true // Formatting occurred; do not replay the cancellation key.
+                }
+                if let current = NotesAccessibility.snapshot(forSlashMenu: true) {
+                    RuntimeStatus.recordCancellation("after-restoration", metrics: NotesAccessibility.cancellationDiagnostics(current))
+                }
+            }
+            if running, let cancellation = EmptyParagraphCancellation(style: style, paragraphStart: plan.range.location) {
+                emptyParagraph = (snapshot, cancellation)
+            } else { emptyParagraph = nil }
+            if cancellation != nil { RuntimeStatus.saveCancellationAttempt("applied") }
+            onStatus?(cancellation != nil ? "已恢复正文 · 空格式段落已取消" : style == .checklist
                 ? "已转换 · 原生待办清单" : "已转换 · 采用备忘录原生格式")
             return true
         case .inline(let style, let text, let delimiter):
@@ -510,5 +625,15 @@ final class ConversionEngine {
             if NotesAccessibility.selectedRange(snapshot.element) == range { return true }
         }
         return false
+    }
+
+    private func restoreCancellationCaret(_ snapshot: EditorSnapshot) async -> Bool {
+        await SelectionRestoration.restore(snapshot.selection, isValid: {
+            self.running && NotesAccessibility.sameFocus(snapshot)
+        }, read: {
+            NotesAccessibility.selectedRange(snapshot.element)
+        }, write: {
+            NotesAccessibility.setSelection(snapshot.element, range: $0)
+        })
     }
 }
