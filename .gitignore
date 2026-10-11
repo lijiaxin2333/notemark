@@ -1,0 +1,20 @@
+# Swift / Xcode build output and local workspace state
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# Packaged apps, archives, previews, and installation backups
+dist/
+
+# Local editor settings and environment configuration
+.idea/
+.vscode/
+.env
+.env.*
+!.env.example
+
+# macOS metadata
+.DS_Store
+._*
