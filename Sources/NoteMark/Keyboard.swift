@@ -2,6 +2,7 @@ import AppKit
 
 enum Keyboard {
     static let marker: Int64 = 0x4E4F54454D41524B
+    static let queuedInputMarker: Int64 = 0x4E4F544551554555
     static func post(_ key: CGKeyCode, flags: CGEventFlags = [], pid: pid_t) {
         let source = CGEventSource(stateID: .privateState)
         for down in [true, false] {
@@ -11,8 +12,8 @@ enum Keyboard {
             event.postToPid(pid)
         }
     }
-    static func replay(_ event: CGEvent, pid: pid_t? = nil) {
-        event.setIntegerValueField(.eventSourceUserData, value: marker)
+    static func replay(_ event: CGEvent, pid: pid_t? = nil, reprocess: Bool = false) {
+        event.setIntegerValueField(.eventSourceUserData, value: reprocess ? queuedInputMarker : marker)
         if let pid { event.postToPid(pid) }
         else { event.post(tap: .cghidEventTap) }
     }

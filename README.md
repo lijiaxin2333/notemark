@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 Write Markdown directly in Apple Notes. NoteMark converts it into native Notes formatting.
 
-**Version: 0.1.3 beta** · macOS 14+ · Current build: Apple Silicon
+**Version: 0.1.4 beta** · macOS 14+ · Current build: Apple Silicon
 
 ## Install and grant permissions
 
@@ -20,6 +20,7 @@ Permissions must be granted manually. Full Disk Access is not required. The app 
 - Keep Apple Notes in front and type in the note body. Start paragraph markers on an empty line, then press **Space**.
 - Type `/` on an empty line for the command menu. Search with `/h2` or `/code`; use **↑ / ↓** to select and **Return / Tab** to apply. **Esc** closes the menu and keeps your text. You can also click a command.
 - Finish an inline marker such as `**bold**`, then press **Space** or **Return** to convert it.
+- After NoteMark creates a title or heading, press **Backspace**, **Esc**, or **Ctrl+K** to return to Body if you have not typed anything or moved the caret. For a line that already contains text, use **⌘⇧B** to switch to Body.
 - The NoteMark menu bar icon provides pause, resume, and quit actions. Pausing lasts for the current session; the next launch starts automatically when permission is ready.
 - Use **⌘Z** to undo. Paragraph conversion may need two undo actions.
 
@@ -64,7 +65,7 @@ swift test
 sh scripts/build.sh
 ```
 
-Output: `dist/NoteMark.app` and `dist/NoteMark-0.1.3.zip`. The build uses ad-hoc signing.
+Output: `dist/NoteMark.app` and `dist/NoteMark-0.1.4.zip`. The build uses ad-hoc signing.
 
 ```sh
 dist/NoteMark.app/Contents/MacOS/NoteMark --self-check

@@ -6,8 +6,11 @@ if CommandLine.arguments.contains("--self-check") {
     let title = MarkdownRule.plan(beforeCaret: "#", trigger: .space)
     let bold = MarkdownRule.plan(beforeCaret: "中文 **粗体**", trigger: .space)
     let slash = SlashQuery.parse(beforeCaret: "/h2")
+    let cancelled = EmptyHeadingCancellation(style: .title, paragraphStart: 0)?.plan(
+        beforeCaret: "", windowStart: 0, afterCaret: "", selection: NSRange(location: 0, length: 0))
     guard title?.conversion == .paragraph(.title), bold != nil,
-          slash?.query == "h2", SlashCommand.matching("h2").first?.style == .heading else { exit(1) }
+          slash?.query == "h2", SlashCommand.matching("h2").first?.style == .heading,
+          cancelled?.conversion == .paragraph(.body), cancelled?.range.length == 0 else { exit(1) }
     print("NoteMark self-check passed · \(ProcessInfo.processInfo.operatingSystemVersionString)")
     exit(0)
 }

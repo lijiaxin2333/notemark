@@ -6,8 +6,8 @@ Environment: macOS 27.0.1 (26A434), Apple Silicon, Swift 6.4.
 
 ## Passed
 
-- **40 tests, 0 failures** (`swift test`): Markdown rules, Slash search and selection, UTF-16 ranges, font-size preservation, RTF, and automatic startup/pause behavior. `-` + Space maps to a bullet list.
-- Release build, `--self-check`, signature verification, and ZIP integrity check for **0.1.3**.
+- **48 tests, 0 failures** (`swift test`): Markdown rules, Slash search and selection, UTF-16 ranges, font-size preservation, RTF, automatic startup/pause behavior, and empty-heading cancellation. `-` + Space maps to a bullet list; empty-heading cancellation produces a zero-length Body edit.
+- Release build, `--self-check`, signature verification, and ZIP integrity check for **0.1.4**.
 - Offscreen rendering and visual review of the app's own setup and Slash views.
 
 `--diagnose` reported permissions available in the development process. This does not verify permissions for a separately launched app.
@@ -19,6 +19,7 @@ Use a new test note after granting permissions. These checks have **not** been c
 | Check | Expected |
 | --- | --- |
 | Type `-` + Space, then `##` + Space | Native bullet list and heading |
+| Type `#` / `##` / `###` + Space, then Backspace, Esc, or Ctrl+K without typing text; also try cancelling immediately | Return to Body without deleting or merging lines; typing, caret movement, and app switching end this cancellation state |
 | Type `**bold**` + Space after Chinese text or emoji | Correct text range; normal font afterward |
 | Enter and leave a code paragraph | Code operators and markers stay unchanged inside |
 | Convert a paragraph below an image | Image stays in place |

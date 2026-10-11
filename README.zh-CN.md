@@ -4,7 +4,7 @@
 
 在 Apple 备忘录中直接写 Markdown，NoteMark 会将标记转换为备忘录原生格式。
 
-**版本：0.1.3 测试版** · macOS 14+ · 当前安装包适用于 Apple Silicon
+**版本：0.1.4 测试版** · macOS 14+ · 当前安装包适用于 Apple Silicon
 
 ## 安装与权限配置
 
@@ -20,6 +20,7 @@
 - 在备忘录正文中输入，并保持备忘录位于前台。段落标记要在空行行首输入，再按 **空格**。
 - 空行输入 `/` 打开命令菜单。输入 `/h2` 或 `/code` 搜索，用 **↑ / ↓** 选择，按 **回车 / Tab** 执行。**Esc** 关闭并保留文字，也可点击命令。
 - 写完 `**粗体**` 等行内标记后，按 **空格或回车** 转换。
+- NoteMark 刚切换为标题时，如果尚未输入内容或移动光标，按 **退格**、**Esc** 或 **Ctrl+K** 即可恢复正文。已有文字时，可按 **⌘⇧B** 切回正文。
 - 点击菜单栏 NoteMark 图标，可 **暂停 Markdown 转换**、**恢复 Markdown 转换** 或 **退出 NoteMark**。手动暂停仅保持到本次退出；下次启动会在权限就绪后自动开启。
 - 按 **⌘Z** 撤销。段落转换可能需要撤销两次。
 
@@ -64,7 +65,7 @@ swift test
 sh scripts/build.sh
 ```
 
-输出：`dist/NoteMark.app` 和 `dist/NoteMark-0.1.3.zip`。构建使用本地 ad-hoc 签名。
+输出：`dist/NoteMark.app` 和 `dist/NoteMark-0.1.4.zip`。构建使用本地 ad-hoc 签名。
 
 ```sh
 dist/NoteMark.app/Contents/MacOS/NoteMark --self-check

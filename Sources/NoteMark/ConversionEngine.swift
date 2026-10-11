@@ -16,6 +16,7 @@ final class ConversionEngine {
     private var slashTracking = false
     private var slashSuppressed = false
     private var workspaceObserver: NSObjectProtocol?
+    private var emptyHeading: (snapshot: EditorSnapshot, cancellation: EmptyHeadingCancellation)?
 
     init() {
         slashPanel.onChoose = { [weak self] command in
@@ -51,6 +52,7 @@ final class ConversionEngine {
                                                                                object: nil, queue: .main) { [weak self] _ in
             if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != NotesAccessibility.bundleID {
                 self?.dismissSlash()
+                self?.emptyHeading = nil
             }
         }
         onStatus?("已开启 · 在备忘录中输入 Markdown")
@@ -58,6 +60,7 @@ final class ConversionEngine {
     }
 
     func stop() {
+        emptyHeading = nil
         dismissSlash()
         if let workspaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver) }
         workspaceObserver = nil
@@ -78,6 +81,7 @@ final class ConversionEngine {
         }
         guard event.getIntegerValueField(.eventSourceUserData) != Keyboard.marker else { return false }
         guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == NotesAccessibility.bundleID else {
+            emptyHeading = nil
             recentInput = ""
             dismissSlash()
             return false
@@ -87,10 +91,30 @@ final class ConversionEngine {
             if let copy = event.copy() { buffered.append(copy) }
             return true
         }
-        if type == .scrollWheel { dismissSlash(); return false }
+        if type == .scrollWheel { emptyHeading = nil; dismissSlash(); return false }
         if [.leftMouseDown, .rightMouseDown, .otherMouseDown].contains(type) {
+            emptyHeading = nil
             if !slashPanel.containsMouse() { recentInput = ""; dismissSlash() }
             return false
+        }
+        let key = event.getIntegerValueField(.keyboardEventKeycode)
+        if running, type == .keyDown {
+            let modifiers = event.flags.intersection([.maskShift, .maskCommand, .maskControl, .maskAlternate])
+            let cancelKey = ([51, 53].contains(key) && modifiers.isEmpty) ||
+                            (key == 40 && modifiers == .maskControl)
+            if cancelKey, !slashPanel.isVisible, let heading = emptyHeading,
+               !NotesAccessibility.isComposing(), NotesAccessibility.sameFocus(heading.snapshot),
+               let snapshot = NotesAccessibility.snapshot(),
+               let plan = heading.cancellation.plan(beforeCaret: snapshot.before, windowStart: snapshot.windowStart,
+                                                    afterCaret: snapshot.after, selection: snapshot.selection) {
+                emptyHeading = nil
+                recentInput = ""
+                dismissSlash()
+                beginConversion(plan, snapshot: snapshot, original: event.copy(), cancellation: heading.cancellation)
+                return true
+            }
+            // Typing, navigation, and other shortcuts end the initial empty-heading state.
+            emptyHeading = nil
         }
         if type == .keyDown, !event.flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty {
             dismissSlash()
@@ -101,7 +125,6 @@ final class ConversionEngine {
               event.getIntegerValueField(.keyboardEventAutorepeat) == 0 ||
                 (slashPanel.isVisible && [125, 126].contains(event.getIntegerValueField(.keyboardEventKeycode))),
               event.flags.intersection([.maskCommand, .maskControl, .maskAlternate]).isEmpty else { return false }
-        let key = event.getIntegerValueField(.keyboardEventKeycode)
         if slashPanel.isVisible && !event.flags.contains(.maskShift) {
             if NotesAccessibility.isComposing() {
                 scheduleSlashUpdate()
@@ -164,12 +187,13 @@ final class ConversionEngine {
         return true
     }
 
-    private func beginConversion(_ plan: EditPlan, snapshot: EditorSnapshot, original: CGEvent?) {
+    private func beginConversion(_ plan: EditPlan, snapshot: EditorSnapshot, original: CGEvent?,
+                                 cancellation: EmptyHeadingCancellation? = nil) {
         // Menu traversal and editing run outside the event-tap callback.
         busy = snapshot
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let converted = await self.apply(plan, snapshot: snapshot)
+            let converted = await self.apply(plan, snapshot: snapshot, cancellation: cancellation)
             if !converted, let original, NotesAccessibility.sameFocus(snapshot),
                NotesAccessibility.setSelection(snapshot.element, range: snapshot.selection) {
                 Keyboard.replay(original, pid: snapshot.pid)
@@ -177,8 +201,8 @@ final class ConversionEngine {
             let queued = self.buffered
             self.buffered.removeAll()
             self.busy = nil
-            // Preserve mouse clicks and system shortcuts in their original event order.
-            for event in queued { Keyboard.replay(event) }
+            // Reprocess queued user input so an immediate heading cancellation is recognized.
+            for event in queued { Keyboard.replay(event, reprocess: true) }
         }
     }
 
@@ -230,29 +254,43 @@ final class ConversionEngine {
         return true
     }
 
-    private func apply(_ plan: EditPlan, snapshot: EditorSnapshot) async -> Bool {
+    private func apply(_ plan: EditPlan, snapshot: EditorSnapshot, cancellation: EmptyHeadingCancellation?) async -> Bool {
         guard NotesAccessibility.sameFocus(snapshot),
               NotesAccessibility.selectedRange(snapshot.element) == snapshot.selection,
               NotesAccessibility.text(snapshot.element, range: plan.range) == plan.original else { return false }
         switch plan.conversion {
         case .paragraph(let style):
-            guard let command = NotesAccessibility.command(for: style, pid: snapshot.pid),
-                  NotesAccessibility.sameFocus(snapshot),
-                  NotesAccessibility.setSelection(snapshot.element, range: plan.range) else {
-                onStatus?("当前编辑器没有提供可用的格式命令，已保留 Markdown")
+            guard let command = NotesAccessibility.command(for: style, pid: snapshot.pid) else {
+                onStatus?(cancellation != nil ? "无法切换正文，已保留原按键操作" : "当前编辑器没有提供可用的格式命令，已保留 Markdown")
                 return false
             }
-            Keyboard.post(51, pid: snapshot.pid) // Native delete, preserving the surrounding note.
-            guard await waitForSelection(NSRange(location: plan.range.location, length: 0), snapshot: snapshot) else {
-                onStatus?("编辑器响应未确认；请检查刚才的输入，必要时按 ⌘Z 撤销")
-                return true // Do not duplicate the swallowed delimiter after a partial edit.
+            if let cancellation {
+                guard let current = NotesAccessibility.snapshot(), NotesAccessibility.sameFocus(snapshot),
+                      cancellation.plan(beforeCaret: current.before, windowStart: current.windowStart,
+                                        afterCaret: current.after, selection: current.selection) == plan else { return false }
+            }
+            guard NotesAccessibility.selectedRange(snapshot.element) == snapshot.selection,
+                  NotesAccessibility.sameFocus(snapshot),
+                  NotesAccessibility.setSelection(snapshot.element, range: plan.range) else {
+                onStatus?(cancellation != nil ? "无法切换正文，已保留原按键操作" : "当前编辑器没有提供可用的格式命令，已保留 Markdown")
+                return false
+            }
+            if plan.range.length > 0 {
+                Keyboard.post(51, pid: snapshot.pid) // Native delete, preserving the surrounding note.
+                guard await waitForSelection(NSRange(location: plan.range.location, length: 0), snapshot: snapshot) else {
+                    onStatus?("编辑器响应未确认；请检查刚才的输入，必要时按 ⌘Z 撤销")
+                    return true // Do not duplicate the swallowed delimiter after a partial edit.
+                }
             }
             guard NotesAccessibility.sameFocus(snapshot),
                   AXUIElementPerformAction(command, kAXPressAction as CFString) == .success else {
-                onStatus?("原生格式命令未执行；可按 ⌘Z 恢复标记")
-                return true
+                onStatus?(cancellation != nil ? "正文格式未切换，已保留原按键操作" : "原生格式命令未执行；可按 ⌘Z 恢复标记")
+                return plan.range.length > 0
             }
-            onStatus?("已转换 · 采用备忘录原生格式")
+            if running, let cancellation = EmptyHeadingCancellation(style: style, paragraphStart: plan.range.location) {
+                emptyHeading = (snapshot, cancellation)
+            } else { emptyHeading = nil }
+            onStatus?(cancellation != nil ? "已恢复正文 · 空标题已取消" : "已转换 · 采用备忘录原生格式")
             return true
         case .inline(let style, let text, let delimiter):
             guard let attributes = snapshot.baseAttributes,
