@@ -6,7 +6,7 @@ final class MarkdownRuleTests: XCTestCase {
         let examples: [(String, ParagraphStyle)] = [
             ("#", .title), ("##", .heading), ("###", .subheading),
             (">", .quote), ("[]", .checklist), ("[ ]", .checklist),
-            ("- [ ]", .checklist), ("*", .bullets), ("-", .dashed), ("1.", .numbered)
+            ("- [ ]", .checklist), ("*", .bullets), ("-", .bullets), ("1.", .numbered)
         ]
         for (input, style) in examples {
             let result = MarkdownRule.plan(beforeCaret: input, trigger: .space)

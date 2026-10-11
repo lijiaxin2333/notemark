@@ -106,7 +106,7 @@ public enum MarkdownRule {
         let prefixes: [String: ParagraphStyle] = [
             "#": .title, "##": .heading, "###": .subheading,
             ">": .quote, "[]": .checklist, "[ ]": .checklist, "- [ ]": .checklist,
-            "*": .bullets, "-": .dashed, "1.": .numbered,
+            "*": .bullets, "-": .bullets, "1.": .numbered,
             "/title": .title, "/h1": .title,
             "/heading": .heading, "/h2": .heading,
             "/subheading": .subheading, "/h3": .subheading,

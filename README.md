@@ -2,7 +2,7 @@
 
 给 Apple 备忘录添加 Markdown 输入的本地菜单栏辅助程序，使用 Swift、AppKit、Accessibility 和 Core Graphics。目标是在备忘录窗口中直接输入，不另开 Markdown 编辑器。
 
-这是 **0.1.2 测试版**。已在 macOS 27.0.1 / Apple Silicon 编译；自动转换是否能在当前 Notes 编辑器完整工作，需要授权后的真实输入测试。没有使用 Computer Use 开发或测试，也没有修改 Notes 数据库。
+这是 **0.1.3 测试版**。已在 macOS 27.0.1 / Apple Silicon 编译；自动转换是否能在当前 Notes 编辑器完整工作，需要授权后的真实输入测试。没有使用 Computer Use 开发或测试，也没有修改 Notes 数据库。
 
 ## 运行
 
@@ -33,7 +33,8 @@
 | --- | --- |
 | `#`、`##`、`###` | 原生标题、小标题、次级标题 |
 | `[]`、`[ ]`、`- [ ]` | 原生待办清单 |
-| `-`、`*`、`1.` | 原生虚线、项目符号、编号列表 |
+| `-`、`*` | 原生圆点项目符号列表 |
+| `1.` | 原生编号列表 |
 | `>` | 原生引用 |
 | 三个反引号 | 原生等宽代码段落；在代码段落再次输入退出 |
 | `/h1`、`/h2`、`/h3`、`/body` | 切换原生段落样式 |
@@ -71,7 +72,7 @@ dist/NoteMark.app/Contents/MacOS/NoteMark --diagnose
 
 代码分为纯规则与 Slash 查询 `NoteMarkCore`、正文范围读取 `NotesAccessibility`、转换与输入排队 `ConversionEngine`、非激活浮层 `SlashCommandPanel`、菜单栏和权限页面 `AppDelegate`。
 
-构建脚本会生成 `dist/NoteMark.app` 和 `dist/NoteMark-0.1.2.zip`，并检查签名与本地规则。`dist/`、Swift/Xcode 构建缓存、编辑器本地配置及 `.env` 文件均由 `.gitignore` 排除，仓库只保留源码、测试和文档。
+构建脚本会生成 `dist/NoteMark.app` 和 `dist/NoteMark-0.1.3.zip`，并检查签名与本地规则。`dist/`、Swift/Xcode 构建缓存、编辑器本地配置及 `.env` 文件均由 `.gitignore` 排除，仓库只保留源码、测试和文档。
 
 ## 授权后的手动验证
 
