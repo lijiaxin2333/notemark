@@ -41,7 +41,7 @@ final class MarkdownRuleTests: XCTestCase {
             XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .space, selectionLength: 1))
             XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .enter))
             XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .space, afterCaret: "task\u{fffc}"))
-            XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .space, afterCaret: "task", rightBoundaryKnown: false))
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .space, afterCaret: nil))
             XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, windowStart: 10, trigger: .space, afterCaret: "task"))
             XCTAssertNil(MarkdownRule.plan(beforeCaret: "text " + marker, trigger: .space))
             XCTAssertNil(MarkdownRule.plan(beforeCaret: "\\" + marker, trigger: .space))
@@ -100,9 +100,10 @@ final class MarkdownRuleTests: XCTestCase {
                        .paragraph(.bullets))
     }
     func testBulletRejectsUnknownOrTruncatedRightBoundary() {
-        for tail in ["", "?", "你好", String(repeating: "a", count: 512)] {
-            XCTAssertNil(MarkdownRule.plan(beforeCaret: "-", trigger: .space, afterCaret: tail, rightBoundaryKnown: false))
-        }
+        XCTAssertNil(MarkdownRule.plan(beforeCaret: "-", trigger: .space, afterCaret: nil))
+        XCTAssertNil(MarkdownRule.plan(beforeCaret: "#", trigger: .space, afterCaret: nil))
+        // Inline Markdown does not depend on the right boundary.
+        XCTAssertNotNil(MarkdownRule.plan(beforeCaret: "**bold**", trigger: .space, afterCaret: nil))
     }
     func testUnicodeParagraphOffsets() {
         let input = "🌳 算法\n##"
@@ -186,12 +187,35 @@ final class MarkdownRuleTests: XCTestCase {
         XCTAssertNil(MarkdownRule.plan(beforeCaret: "path/h1", trigger: .space))
     }
     func testShortcutMappingMatchesAppleNotes() {
-        XCTAssertEqual(ParagraphStyle.title.shortcut, "t")
-        XCTAssertEqual(ParagraphStyle.heading.shortcut, "h")
-        XCTAssertEqual(ParagraphStyle.subheading.shortcut, "j")
-        XCTAssertEqual(ParagraphStyle.monostyled.shortcut, "m")
-        XCTAssertEqual(ParagraphStyle.quote.shortcut, "'")
-        XCTAssertFalse(ParagraphStyle.quote.needsShift)
-        XCTAssertTrue(ParagraphStyle.checklist.needsShift)
+        XCTAssertEqual(MenuShortcut.format(.title).key, "t")
+        XCTAssertEqual(MenuShortcut.format(.heading).key, "h")
+        XCTAssertEqual(MenuShortcut.format(.subheading).key, "j")
+        XCTAssertEqual(MenuShortcut.format(.monostyled).key, "m")
+        XCTAssertEqual(MenuShortcut.format(.quote).key, "'")
+        XCTAssertFalse(MenuShortcut.format(.quote).requiresShift)
+        XCTAssertTrue(MenuShortcut.format(.checklist).requiresShift)
+        let expected: [ParagraphStyle: String] = [.title: "t", .heading: "h", .subheading: "j", .body: "b",
+            .monostyled: "m", .quote: "'", .checklist: "l", .bullets: "7", .dashed: "8", .numbered: "9"]
+        for style in ParagraphStyle.allCases {
+            XCTAssertEqual(MenuShortcut.format(style).key, expected[style], style.rawValue)
+            XCTAssertEqual(MenuShortcut.format(style).requiresShift, style != .quote, style.rawValue)
+        }
+    }
+
+    func testTypedSlashNamesMatchTheMenuCommands() {
+        let expected: [String: ParagraphStyle] = [
+            "/title": .title, "/h1": .title, "/heading": .heading, "/h2": .heading,
+            "/subheading": .subheading, "/h3": .subheading, "/body": .body, "/code": .monostyled,
+            "/quote": .quote, "/checklist": .checklist, "/bullets": .bullets, "/dashed": .dashed,
+            "/numbered": .numbered
+        ]
+        for (line, style) in expected {
+            XCTAssertEqual(MarkdownRule.plan(beforeCaret: line, trigger: .space)?.conversion, .paragraph(style), line)
+        }
+        // Search aliases open the menu but are not typed shortcuts.
+        for line in ["/todo", "/list", "/text", "/mono", "/H1", "／h1", "/h2 ", "/标题"] {
+            XCTAssertNil(MarkdownRule.plan(beforeCaret: line, trigger: .space), line)
+        }
+        XCTAssertNil(MarkdownRule.plan(beforeCaret: "/h2", trigger: .enter))
     }
 }

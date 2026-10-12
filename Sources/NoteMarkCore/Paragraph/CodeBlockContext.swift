@@ -1,13 +1,13 @@
 import Foundation
 
-public enum CodeBlockCancellationIntent {
+public enum CodeBlockCancellationIntent: Sendable {
     case backwardDeletion
     case forwardDeletion
     case escape
 }
 
 /// A bounded view of contiguous native monospaced paragraphs around the caret.
-public struct CodeBlockContext {
+public struct CodeBlockContext: Equatable, Sendable {
     public let range: NSRange
     public let text: String
 
@@ -20,7 +20,7 @@ public struct CodeBlockContext {
               caret >= windowStart, caret <= windowStart + source.length else { return nil }
         var lines: [NSRange] = []
         var start = 0
-        for index in 0..<source.length where UnicodeScalar(source.character(at: index)).map({ CharacterSet.newlines.contains($0) }) == true {
+        for index in 0..<source.length where source.isLineBreak(at: index) {
             // A CRLF pair is one paragraph boundary.
             if index > 0, source.character(at: index) == 10, source.character(at: index - 1) == 13 {
                 start = index + 1; continue
@@ -58,7 +58,7 @@ public struct CodeBlockContext {
                                  intent: CodeBlockCancellationIntent = .escape) -> EditPlan? {
         guard selection.length == 0, selection.location >= range.location,
               selection.location <= NSMaxRange(range),
-              text.unicodeScalars.allSatisfy({ CharacterSet.newlines.contains($0) }) else { return nil }
+              text.consistsOfLineBreaks else { return nil }
         if intent != .escape {
             let boundary = intent == .backwardDeletion ? range.location : NSMaxRange(range)
             guard selection.location == boundary else { return nil }
@@ -87,11 +87,24 @@ public struct CodeBlockContext {
         return first == true && last == true ? true : nil
     }
 
+    /// Classify a paragraph inside a sampled window. The empty paragraph at the
+    /// end of the sample has no character of its own: it is Body only at the
+    /// document end, and unknown when the document continues past the sample.
+    public static func paragraphState(_ paragraph: NSRange, in source: NSString, endsAtDocumentBoundary: Bool,
+                                      fontIsCode: (Int) -> Bool?) -> Bool? {
+        // No separator or character exists for the empty terminal paragraph.
+        // It cannot inherit the previous paragraph's code font.
+        if paragraph.length == 0, paragraph.location == source.length { return endsAtDocumentBoundary ? false : nil }
+        let end = NSMaxRange(paragraph)
+        let hasSeparator = end < source.length && source.isLineBreak(at: end)
+        return codeParagraphState(paragraph, separatorIsCode: hasSeparator ? fontIsCode(end) : nil, fontIsCode: fontIsCode)
+    }
+
     /// A selection ending at the start of an empty paragraph may leave that
     /// paragraph unchanged. Apply Body at the terminal caret as well.
     public static func bodyFormattingSelections(for plan: EditPlan) -> [NSRange] {
         guard plan.conversion == .paragraph(.body),
-              plan.original.unicodeScalars.allSatisfy({ CharacterSet.newlines.contains($0) }),
+              plan.original.consistsOfLineBreaks,
               plan.range.length == (plan.original as NSString).length else { return [] }
         return plan.range.length == 0 ? [plan.range] : [plan.range, NSRange(location: NSMaxRange(plan.range), length: 0)]
     }

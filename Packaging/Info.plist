@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>@NOTEMARK_BUNDLE_ID@</string>
+<key>CFBundleName</key><string>NoteMark</string>
+<key>CFBundleDisplayName</key><string>NoteMark</string>
+<key>CFBundleExecutable</key><string>NoteMark</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>@NOTEMARK_VERSION@</string>
+<key>CFBundleVersion</key><string>@NOTEMARK_BUILD@</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>LSUIElement</key><true/>
+<key>NSHighResolutionCapable</key><true/>
+<key>NSPrincipalClass</key><string>NSApplication</string>
+<key>NSInputMonitoringUsageDescription</key><string>NoteMark 需要在 Apple 备忘录中识别 Markdown 输入并转换格式。</string>
+</dict></plist>

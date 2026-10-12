@@ -1,5 +1,5 @@
 /// Automatic startup and permission changes must not override an explicit pause.
-public struct ConversionPermissions: Equatable {
+public struct ConversionPermissions: Equatable, Sendable {
     public let accessibility: Bool
     public let inputMonitoring: Bool
 
@@ -9,7 +9,7 @@ public struct ConversionPermissions: Equatable {
     }
 }
 
-public struct AutomaticConversionPolicy {
+public struct AutomaticConversionPolicy: Sendable {
     public private(set) var wantsConversion = true
     private var lastAttempt: ConversionPermissions?
 

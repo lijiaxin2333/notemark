@@ -9,6 +9,5 @@ let package = Package(
         .target(name: "NoteMarkCore"),
         .executableTarget(name: "NoteMark", dependencies: ["NoteMarkCore"]),
         .testTarget(name: "NoteMarkCoreTests", dependencies: ["NoteMarkCore"])
-    ],
-    swiftLanguageModes: [.v5]
+    ]
 )

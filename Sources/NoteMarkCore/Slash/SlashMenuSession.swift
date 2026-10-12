@@ -2,8 +2,8 @@ import Foundation
 
 /// Menu lifetime is separate from an executable edit: an IME can temporarily
 /// expose a selection, apostrophes in pinyin, or no readable editor snapshot.
-public struct SlashMenuSession {
-    public enum Update: Equatable {
+public struct SlashMenuSession: Sendable {
+    public enum Update: Equatable, Sendable {
         case show(String)
         case wait
         /// Hide the panel while continuing to track edits to this slash query.
@@ -36,8 +36,9 @@ public struct SlashMenuSession {
         if isDeletion { initialPresentationPending = false }
     }
 
+    /// `afterCaret` is nil when the paragraph's right boundary is unknown.
     public mutating func update(beforeCaret: String?, windowStart: Int = 0,
-                                afterCaret: String = "", selectionLength: Int = 0,
+                                afterCaret: String? = "", selectionLength: Int = 0,
                                 isMonospaced: Bool = false, isComposing: Bool = false) -> Update {
         guard let beforeCaret else {
             if isComposing { waitingForCommit = true; commitReads = 0; return .wait }
@@ -45,13 +46,11 @@ public struct SlashMenuSession {
             return unavailableReads <= 5 ? .wait : .dismiss
         }
         unavailableReads = 0
-        let text = beforeCaret as NSString
-        let newline = text.rangeOfCharacter(from: .newlines, options: .backwards)
-        guard windowStart >= 0, windowStart == 0 || newline.location != NSNotFound else { return .dismiss }
-        let start = newline.location == NSNotFound ? 0 : NSMaxRange(newline)
-        let line = text.substring(from: start)
-        guard !isMonospaced, line.hasPrefix("/") || line.hasPrefix("／") else { return .dismiss }
-        let paragraph = windowStart + start
+        let caretLine = CaretLine(beforeCaret: beforeCaret, windowStart: windowStart)
+        guard windowStart >= 0, caretLine.startIsKnown else { return .dismiss }
+        let line = caretLine.text
+        guard !isMonospaced, SlashQuery.startsWithSlash(line) else { return .dismiss }
+        let paragraph = caretLine.documentStart
         if let paragraphStart, paragraphStart != paragraph {
             // Visiting an existing slash on another line is not a fresh slash input.
             initialSlashPending = false

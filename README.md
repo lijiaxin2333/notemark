@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 Write Markdown directly in Apple Notes. NoteMark converts it into native Notes formatting.
 
-**Version: 0.1.22 beta** · macOS 14+ · Current build: Apple Silicon
+**Version: 0.1.23 beta** · macOS 14+ · Current build: Apple Silicon
 
 ## Install and grant permissions
 
@@ -57,7 +57,7 @@ Search matches command titles, descriptions, and Chinese or English aliases. “
 ## Notes
 
 - This is a local menu bar helper. It does not store or upload note content, or modify the Notes database.
-- Paragraphs use native Notes styles; inline formatting preserves the current font size. Inline conversion briefly uses the clipboard, then restores it unless you have copied something new.
+- Paragraphs use native Notes styles; inline formatting preserves the current font size. Inline conversion briefly uses the clipboard, marked as transient so clipboard managers skip it, then restores it once Notes has pasted, unless you have copied something new. Before pasting, NoteMark saves every representation the source app can supply at that moment; lazily promised content such as file promises cannot be restored.
 - Whole-note conversion, nested Markdown, and Markdown image insertion are not supported. Paragraphs containing images are skipped.
 - Empty-code cancellation inspects at most 4096 UTF-16 units on each side of the caret. If the full block boundaries cannot be confirmed, it keeps the native key operation.
 - Before converting existing text to a bullet list or checklist, NoteMark checks up to 512 UTF-16 units after the caret. Conversion is skipped if it cannot confirm the paragraph's end within that range.
@@ -72,7 +72,7 @@ sh scripts/build.sh
 sh scripts/install.sh
 ```
 
-The installer checks signature compatibility, backs up the installed app, quits it, replaces it at the same path, and reopens it. To check compatibility without installing, run `sh scripts/install.sh --check`.
+The installer checks signature compatibility, backs up the installed app, quits it, replaces it at the same path, and reopens it. To check compatibility without installing, run `sh scripts/install.sh --check`. Backups go to `dist/installed-backups`; the 10 most recent are kept. Set `NOTEMARK_BACKUP_LIMIT` to keep a different number, or `0` to keep all.
 
 Permissions should carry over between compatible signed versions. The first update from an old ad-hoc build to a certificate-signed build requires permission again. Keep the signing identity and bundle identifier unchanged. See [Apple's explanation of code identity](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
 
@@ -92,19 +92,20 @@ sh scripts/configure-signing.sh CERTIFICATE_SHA1
 The selection is stored in `.signing-identity`, which Git ignores. The certificate and private key stay in your keychain. macOS may ask you to allow `codesign` to use the private key; approve it in the system Keychain dialog. Use Apple Development for local development; public releases need [Developer ID signing and notarization](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
 
 ```sh
-swift test
 sh scripts/build.sh
 ```
 
-Output: `dist/NoteMark.app` and `dist/NoteMark-0.1.22.zip`. Builds use the configured certificate; they fail if no identity is configured. For a temporary ad-hoc test build, use `NOTEMARK_SIGNING_IDENTITY=- sh scripts/build.sh`; the installer rejects these builds.
+The build runs `swift test` first; set `NOTEMARK_SKIP_TESTS=1` to skip it. Output: `dist/NoteMark.app` and `dist/NoteMark-<version>.zip`. The version and bundle identifier come from `Packaging/app.env`, and `Packaging/Info.plist` is the bundle's property list template. Builds use the configured certificate; they fail if no identity is configured. For a temporary ad-hoc test build, use `NOTEMARK_SIGNING_IDENTITY=- sh scripts/build.sh`; the installer rejects these builds.
 
 ```sh
 dist/NoteMark.app/Contents/MacOS/NoteMark --self-check
 dist/NoteMark.app/Contents/MacOS/NoteMark --diagnose
 ```
 
-`--self-check` checks local rules. `--diagnose` prints the OS version, this process's permissions, and the last app status. The local report contains no note text or keystrokes; it may be stale after the app exits.
+`--self-check` checks local rules. `--diagnose` prints the OS version, this process's permissions, and the last app status. The local report contains no note text or keystrokes; it may be stale after the app exits. To also record paragraph tracking after every editor change, run `defaults write dev.local.notemark NoteMarkVerboseDiagnostics -bool YES` and restart NoteMark; this adds Accessibility reads while typing, so turn it off with `defaults delete dev.local.notemark NoteMarkVerboseDiagnostics` when done.
 
 Build output and local configuration are ignored by Git.
+
+Code layout: `Sources/NoteMarkCore` holds the Markdown, slash, paragraph, and key-classification rules as pure, unit-tested Swift. `Sources/NoteMark` is the menu bar app: `App` (app delegate, command-line modes and self-check, interface text), `Input` (event tap, held input, keyboard layout, synthetic keys, pasteboard), `Accessibility` (Notes editor snapshots and menu commands), `Conversion` (event routing, slash menu, paragraph tracking, editing), `Diagnostics`, and `UI`. The app builds in Swift 6 language mode with main-actor isolation.
 
 License: [MIT](LICENSE).

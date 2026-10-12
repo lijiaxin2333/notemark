@@ -4,7 +4,7 @@
 
 在 Apple 备忘录中直接写 Markdown，NoteMark 会将标记转换为备忘录原生格式。
 
-**版本：0.1.22 测试版** · macOS 14+ · 当前安装包适用于 Apple Silicon
+**版本：0.1.23 测试版** · macOS 14+ · 当前安装包适用于 Apple Silicon
 
 ## 安装与权限配置
 
@@ -55,8 +55,9 @@ Slash 命令：`/h1`、`/h2`、`/h3`、`/body`、`/code`、`/quote`、`/checklis
 ## 注意事项
 
 - 这是本地菜单栏辅助程序，不保存或上传笔记内容，不修改备忘录数据库。
-- 段落使用备忘录原生样式，行内格式保留当前字号。行内转换会短暂使用剪贴板；若未复制新内容，转换后会恢复原内容。
+- 段落使用备忘录原生样式，行内格式保留当前字号。行内转换会短暂使用剪贴板，并标记为临时内容，剪贴板管理工具会忽略它；备忘录完成粘贴后，若未复制新内容，会恢复原内容。转换前会保存来源 App 当时能提供的全部格式；文件承诺等延迟提供的内容无法恢复。
 - 暂不支持整篇转换、嵌套 Markdown 和 Markdown 图片插入；包含图片的当前段落会跳过转换。
+- 空代码段取消最多检查光标两侧各 4096 个 UTF-16 单元；无法确认整段边界时，保留原生按键操作。
 - 给已有文字加圆点列表或待办清单时，最多检查光标后的 512 个 UTF-16 单元；无法在此范围内确认段落结束时，会跳过转换。
 - 已在 macOS 27.0.1 / Apple Silicon 编译；真实备忘录输入、输入法和快速连续输入仍需手动验证。详见[验证说明](VALIDATION.zh-CN.md)。
 
@@ -69,7 +70,7 @@ sh scripts/build.sh
 sh scripts/install.sh
 ```
 
-安装脚本会检查签名兼容性、备份旧 App、退出程序，在原路径替换并重新打开。只检查、不安装时，运行 `sh scripts/install.sh --check`。
+安装脚本会检查签名兼容性、备份旧 App、退出程序，在原路径替换并重新打开。只检查、不安装时，运行 `sh scripts/install.sh --check`。备份保存在 `dist/installed-backups`，默认保留最近 10 份；可用 `NOTEMARK_BACKUP_LIMIT` 调整数量，设为 `0` 则全部保留。
 
 同签名身份的兼容版本应能沿用权限。首次从旧的 ad-hoc 签名版本换成证书签名版本，仍需重新授权一次。后续请保持签名身份和 Bundle ID 不变。详见 [Apple 对代码身份的说明](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)。
 
@@ -89,19 +90,20 @@ sh scripts/configure-signing.sh CERTIFICATE_SHA1
 选择保存在 Git 忽略的 `.signing-identity` 中，证书和私钥仍在钥匙串。macOS 可能要求允许 `codesign` 使用私钥，请在系统钥匙串弹窗中授权。本机开发可使用 Apple Development；公开分发需要 [Developer ID 签名和公证](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/)。
 
 ```sh
-swift test
 sh scripts/build.sh
 ```
 
-输出：`dist/NoteMark.app` 和 `dist/NoteMark-0.1.22.zip`。构建使用已配置的证书；未配置时会报错。临时 ad-hoc 测试构建可运行 `NOTEMARK_SIGNING_IDENTITY=- sh scripts/build.sh`，安装脚本会拒绝此类构建。
+构建会先运行 `swift test`；设置 `NOTEMARK_SKIP_TESTS=1` 可跳过。输出：`dist/NoteMark.app` 和 `dist/NoteMark-<版本号>.zip`。版本号和 Bundle ID 来自 `Packaging/app.env`，`Packaging/Info.plist` 是 App 属性列表模板。构建使用已配置的证书；未配置时会报错。临时 ad-hoc 测试构建可运行 `NOTEMARK_SIGNING_IDENTITY=- sh scripts/build.sh`，安装脚本会拒绝此类构建。
 
 ```sh
 dist/NoteMark.app/Contents/MacOS/NoteMark --self-check
 dist/NoteMark.app/Contents/MacOS/NoteMark --diagnose
 ```
 
-`--self-check` 检查本地规则；`--diagnose` 输出系统版本、本进程权限及 App 最后记录的运行状态。本地状态文件不记录笔记文字或按键内容；退出后状态可能过时。
+`--self-check` 检查本地规则；`--diagnose` 输出系统版本、本进程权限及 App 最后记录的运行状态。本地状态文件不记录笔记文字或按键内容；退出后状态可能过时。如需在每次编辑后额外记录段落跟踪状态，运行 `defaults write dev.local.notemark NoteMarkVerboseDiagnostics -bool YES` 并重启 NoteMark；这会在输入时增加辅助功能读取，排查完毕后用 `defaults delete dev.local.notemark NoteMarkVerboseDiagnostics` 关闭。
 
 构建产物和本地配置已由 Git 忽略。
+
+代码结构：`Sources/NoteMarkCore` 是纯 Swift 规则层（Markdown、Slash、段落和按键分类），全部有单元测试。`Sources/NoteMark` 是菜单栏 App：`App`（应用委托、命令行模式与自检、界面文字）、`Input`（事件监听、输入暂存、键盘布局、合成按键、剪贴板）、`Accessibility`（备忘录编辑器快照与菜单命令）、`Conversion`（事件分发、Slash 菜单、段落跟踪、编辑）、`Diagnostics` 和 `UI`。App 以 Swift 6 语言模式和主线程隔离编译。
 
 许可证：[MIT](LICENSE)。
