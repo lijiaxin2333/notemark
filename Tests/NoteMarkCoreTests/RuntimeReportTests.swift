@@ -17,11 +17,12 @@ final class RuntimeReportTests: XCTestCase {
             contextStart: 5, contextLength: 1, contextEmpty: true,
             paragraphs: [ParagraphFonts(start: 0, length: 4, firstFont: "Menlo", lastFont: "Menlo", separatorFont: "unavailable")]))
         report.updatedAt = "2026-10-11T00:00:00Z"
+        report.lastUnmatchedRule = "prefixLength=1"
         let object = try json(report)
         XCTAssertEqual(Set(object.keys), [
             "pid", "version", "running", "accessibility", "inputMonitoring", "status", "slashVisible", "slashComposing",
             "slashMatchCount", "trackedParagraphStyle", "paragraphCancellationReady", "lastParagraphObservation",
-            "lastCancellationAttempt", "cancellationTrace", "updatedAt", "verboseDiagnostics"
+            "lastCancellationAttempt", "cancellationTrace", "updatedAt", "verboseDiagnostics", "lastUnmatchedRule"
         ])
         let observation = try XCTUnwrap(object["lastParagraphObservation"] as? [String: Bool])
         XCTAssertEqual(Set(observation.keys), [

@@ -55,6 +55,17 @@ final class KeyPressTests: XCTestCase {
         XCTAssertFalse(KeyPress(code: kVK_ANSI_H, modifiers: .control, layoutCharacter: "").isControlDeletion)
     }
 
+    func testEveryDeletionKeyIsADeletion() {
+        for key in [KeyPress(code: kVK_Delete), KeyPress(code: kVK_ForwardDelete),
+                    KeyPress(code: kVK_Delete, modifiers: .option), KeyPress(code: kVK_Delete, modifiers: .command),
+                    KeyPress(code: kVK_ANSI_H, modifiers: .control, layoutCharacter: "h"),
+                    KeyPress(code: kVK_ANSI_K, modifiers: .control, layoutCharacter: "k")] {
+            XCTAssertTrue(key.isDeletion, "\(key.code) \(key.modifiers)")
+        }
+        XCTAssertFalse(KeyPress(code: kVK_ANSI_A, layoutCharacter: "a").isDeletion)
+        XCTAssertFalse(KeyPress(code: kVK_ANSI_E, modifiers: .control, layoutCharacter: "e").isDeletion)
+    }
+
     func testTypingHistoryResetKeys() {
         let resetting = [123, 124, 125, 126, 115, 119, 116, 121, 48, 53]
         for code in 0..<128 {
@@ -75,6 +86,15 @@ final class KeyPressTests: XCTestCase {
             XCTAssertFalse(KeyPress(code: kVK_ANSI_KeypadDivide, modifiers: modifiers, layoutCharacter: "/").typesSlash)
             XCTAssertFalse(KeyPress(code: kVK_ANSI_KeypadDivide, modifiers: modifiers).typesSlash)
         }
+    }
+
+    func testUndoFollowsTheLayout() {
+        XCTAssertTrue(KeyPress(code: kVK_ANSI_Z, modifiers: .command).isUndo)
+        XCTAssertTrue(KeyPress(code: kVK_ANSI_Z, modifiers: .command, layoutCharacter: "z").isUndo)
+        XCTAssertFalse(KeyPress(code: kVK_ANSI_Z, modifiers: [.command, .shift], layoutCharacter: "Z").isUndo)
+        XCTAssertFalse(KeyPress(code: kVK_ANSI_Z, modifiers: .control).isUndo)
+        // Dvorak: Command-Z is on the ANSI "/" key.
+        XCTAssertTrue(KeyPress(code: kVK_ANSI_Slash, modifiers: .command, layoutCharacter: "z").isUndo)
     }
 
     func testCommandControlOrOption() {

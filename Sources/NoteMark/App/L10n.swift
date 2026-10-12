@@ -1,135 +1,255 @@
 import Foundation
+import NoteMarkCore
 
-/// User-visible text. Keys are stable identifiers; the default values are the
-/// app's current Chinese interface, used until a localization is added.
+/// User-visible text. English is the development language; translations live
+/// in `Packaging/Resources/<language>.lproj/Localizable.strings`.
 enum L10n {
     // MARK: App and menu
 
-    static var appMenuTitle: String { String(localized: "app.menuTitle", defaultValue: "NoteMark · 备忘录 Markdown") }
-    static var enableConversion: String { String(localized: "menu.enable", defaultValue: "开启 Markdown 转换") }
-    static var pauseConversion: String { String(localized: "menu.pause", defaultValue: "暂停 Markdown 转换") }
-    static var retryInputConnection: String { String(localized: "menu.retry", defaultValue: "重试输入连接") }
-    static var resumeConversion: String { String(localized: "menu.resume", defaultValue: "恢复 Markdown 转换") }
-    static var helpAndPermissions: String { String(localized: "menu.help", defaultValue: "使用说明与权限…") }
-    static var openNotes: String { String(localized: "menu.openNotes", defaultValue: "打开备忘录") }
-    static var quit: String { String(localized: "menu.quit", defaultValue: "退出 NoteMark") }
+    static var appMenuTitle: String { String(localized: "app.menuTitle", defaultValue: "NoteMark · Markdown for Notes") }
+    static var enableConversion: String { String(localized: "menu.enable", defaultValue: "Turn On Markdown Conversion") }
+    static var pauseConversion: String { String(localized: "menu.pause", defaultValue: "Pause Markdown Conversion") }
+    static var retryInputConnection: String { String(localized: "menu.retry", defaultValue: "Retry Input Connection") }
+    static var resumeConversion: String { String(localized: "menu.resume", defaultValue: "Resume Markdown Conversion") }
+    static var settingsMenuItem: String { String(localized: "menu.settings", defaultValue: "Settings…") }
+    static var helpAndPermissions: String { String(localized: "menu.help", defaultValue: "Guide and Permissions…") }
+    static var openNotes: String { String(localized: "menu.openNotes", defaultValue: "Open Notes") }
+    static var quit: String { String(localized: "menu.quit", defaultValue: "Quit NoteMark") }
+    static var windowMenu: String { String(localized: "menu.window", defaultValue: "Window") }
+    static var closeWindow: String { String(localized: "menu.close", defaultValue: "Close") }
+    static var minimizeWindow: String { String(localized: "menu.minimize", defaultValue: "Minimize") }
+    static var editMenu: String { String(localized: "menu.edit", defaultValue: "Edit") }
+    static var copy: String { String(localized: "menu.copy", defaultValue: "Copy") }
+    static var selectAll: String { String(localized: "menu.selectAll", defaultValue: "Select All") }
+
+    // MARK: Menu bar state
+
+    static var stateRunning: String { String(localized: "state.running", defaultValue: "Conversion On") }
+    static var statePaused: String { String(localized: "state.paused", defaultValue: "Paused") }
+    static var stateNeedsPermission: String { String(localized: "state.needsPermission", defaultValue: "Needs Permission") }
+    static var stateUnavailable: String { String(localized: "state.unavailable", defaultValue: "Can't Listen for Input") }
 
     // MARK: Status
 
-    static var waitingForPermission: String { String(localized: "status.waitingForPermission", defaultValue: "等待权限 · 授权后自动开启转换") }
-    static var pausedManually: String { String(localized: "status.pausedManually", defaultValue: "已手动暂停") }
-    static var accessibilityRequired: String { String(localized: "status.accessibilityRequired", defaultValue: "请先开启辅助功能权限") }
+    static var waitingForPermission: String {
+        String(localized: "status.waitingForPermission", defaultValue: "Waiting for permission · Conversion starts once it is granted")
+    }
+    static var pausedManually: String { String(localized: "status.pausedManually", defaultValue: "Paused") }
+    static var accessibilityRequired: String {
+        String(localized: "status.accessibilityRequired", defaultValue: "Turn on the “\(accessibilityPermissionName)” permission first")
+    }
     static var inputListeningUnavailable: String {
-        String(localized: "status.inputListeningUnavailable", defaultValue: "无法监听输入：请检查辅助功能与输入监控权限，并重新启动 NoteMark")
+        String(localized: "status.inputListeningUnavailable",
+               defaultValue: "Can't listen for input. Check “\(accessibilityPermissionName)” and “\(inputMonitoringPermissionName)” in \(privacyPaneName), then reopen NoteMark.")
     }
-    static var conversionEnabled: String { String(localized: "status.enabled", defaultValue: "已开启 · 在备忘录中输入 Markdown") }
-    static var inputListeningPaused: String { String(localized: "status.inputListeningPaused", defaultValue: "输入监听已暂停，请在菜单中重新开启") }
+    static var conversionEnabled: String { String(localized: "status.enabled", defaultValue: "On · Type Markdown in Notes") }
+    static var inputListeningPaused: String {
+        String(localized: "status.inputListeningPaused", defaultValue: "Input listening stopped. Turn it on again from the menu.")
+    }
     static var snapshotUnavailableOrComposing: String {
-        String(localized: "status.notConverted.unreadable", defaultValue: "未转换 · 无法读取正文光标，或输入法正在组词")
+        String(localized: "status.notConverted.unreadable",
+               defaultValue: "Not converted · The caret couldn't be read, or an input method is composing")
     }
-    static var markdownDetected: String { String(localized: "status.markdownDetected", defaultValue: "已检测 Markdown 标记 · 等待编辑器更新") }
-    static var editorSnapshotUnavailable: String { String(localized: "diagnostic.snapshotUnavailable", defaultValue: "编辑器快照不可用") }
-    static func noRuleMatched(_ diagnostic: String) -> String {
-        String(localized: "status.noRuleMatched", defaultValue: "未匹配转换规则 · \(diagnostic)")
-    }
-    /// Values are passed as text so numbers keep ASCII digits in every locale.
-    static func ruleDiagnostic(prefixLength: String, checklistMarker: Bool, trimmedChecklistMarker: Bool, monospaced: Bool,
-                               lineStartKnown: Bool, rightBoundaryKnown: Bool, rightLength: String, containsImage: Bool) -> String {
-        String(localized: "diagnostic.rule", defaultValue: """
-            前缀长度=\(prefixLength)，待办标记=\(String(checklistMarker))，去空格后待办=\(String(trimmedChecklistMarker))，\
-            等宽=\(String(monospaced))，行首边界=\(String(lineStartKnown))，右边界=\(String(rightBoundaryKnown))，\
-            右侧长度=\(rightLength)，含图片=\(String(containsImage))
-            """)
-    }
-    static var unknownLength: String { String(localized: "diagnostic.unknownLength", defaultValue: "未知") }
+    static var markdownDetected: String { String(localized: "status.markdownDetected", defaultValue: "Markdown detected · Waiting for Notes") }
 
     // MARK: Editing results
 
-    static var bodyRestoreUnavailable: String { String(localized: "edit.bodyUnavailable", defaultValue: "无法切换正文，已保留原按键操作") }
+    static var bodyRestoreUnavailable: String {
+        String(localized: "edit.bodyUnavailable", defaultValue: "Couldn't switch to Body. The key was typed as usual.")
+    }
     static var checklistCommandUnavailable: String {
-        String(localized: "edit.checklistUnavailable", defaultValue: "待办命令不可用 · 请检查备忘录「格式 → 核对清单」是否可用；已保留 Markdown")
+        String(localized: "edit.checklistUnavailable",
+               defaultValue: "Checklists aren't available here (Format > Checklist). The Markdown was kept.")
     }
     static var formatCommandUnavailable: String {
-        String(localized: "edit.formatUnavailable", defaultValue: "当前编辑器没有提供可用的格式命令，已保留 Markdown")
+        String(localized: "edit.formatUnavailable", defaultValue: "Notes doesn't offer this format here. The Markdown was kept.")
     }
     static var editorResponseUnconfirmed: String {
-        String(localized: "edit.responseUnconfirmed", defaultValue: "编辑器响应未确认；请检查刚才的输入，必要时按 ⌘Z 撤销")
+        String(localized: "edit.responseUnconfirmed", defaultValue: "Notes didn't confirm the edit. Check your text, and press ⌘Z if needed.")
     }
-    static var quoteExitedBodyFailed: String { String(localized: "edit.quoteExitedBodyFailed", defaultValue: "引用已退出，但正文命令未执行") }
-    static var bodyNotRestored: String { String(localized: "edit.bodyNotRestored", defaultValue: "正文格式未切换，已保留原按键操作") }
-    static var formatCommandFailed: String { String(localized: "edit.formatFailed", defaultValue: "原生格式命令未执行；可按 ⌘Z 恢复标记") }
+    static var quoteExitedBodyFailed: String {
+        String(localized: "edit.quoteExitedBodyFailed", defaultValue: "Left the quote, but Body wasn't applied.")
+    }
+    static var bodyNotRestored: String {
+        String(localized: "edit.bodyNotRestored", defaultValue: "Body wasn't applied. The key was typed as usual.")
+    }
+    static var formatCommandFailed: String {
+        String(localized: "edit.formatFailed", defaultValue: "Notes didn't apply the format. Press ⌘Z to get the marker back.")
+    }
     static var terminalParagraphUnconfirmed: String {
-        String(localized: "edit.terminalParagraphUnconfirmed", defaultValue: "部分空行已恢复正文；末尾段落未确认，请再按一次取消键")
+        String(localized: "edit.terminalParagraphUnconfirmed",
+               defaultValue: "Some blank lines returned to Body. Press the key again for the last one.")
     }
     static var caretUnconfirmed: String {
-        String(localized: "edit.caretUnconfirmed", defaultValue: "格式已切换正文，但光标位置未确认；请检查光标后再继续删除")
+        String(localized: "edit.caretUnconfirmed",
+               defaultValue: "Switched to Body, but the caret position wasn't confirmed. Check it before deleting more.")
     }
-    static var bodyRestored: String { String(localized: "edit.bodyRestored", defaultValue: "已恢复正文 · 空格式段落已取消") }
-    static var checklistConverted: String { String(localized: "edit.checklistConverted", defaultValue: "已转换 · 原生待办清单") }
-    static var paragraphConverted: String { String(localized: "edit.paragraphConverted", defaultValue: "已转换 · 采用备忘录原生格式") }
-    static var fontUnavailable: String { String(localized: "edit.fontUnavailable", defaultValue: "无法读取当前字体，已保留 Markdown") }
-    static var inlineConverted: String { String(localized: "edit.inlineConverted", defaultValue: "已转换 · 保留当前字号") }
+    static var bodyRestored: String { String(localized: "edit.bodyRestored", defaultValue: "Back to Body · Empty format removed") }
+    static var checklistConverted: String { String(localized: "edit.checklistConverted", defaultValue: "Converted · Native checklist") }
+    static var paragraphConverted: String { String(localized: "edit.paragraphConverted", defaultValue: "Converted · Native Notes format") }
+    static var fontUnavailable: String {
+        String(localized: "edit.fontUnavailable", defaultValue: "Couldn't read the current font. The Markdown was kept.")
+    }
+    static var inlineConverted: String { String(localized: "edit.inlineConverted", defaultValue: "Converted · Font size kept") }
     static var pasteUnconfirmed: String {
-        String(localized: "edit.pasteUnconfirmed", defaultValue: "粘贴响应未确认；请检查刚才的输入，必要时按 ⌘Z 撤销")
+        String(localized: "edit.pasteUnconfirmed", defaultValue: "Notes didn't confirm the paste. Check your text, and press ⌘Z if needed.")
     }
+    static var dividerUnavailable: String {
+        String(localized: "edit.dividerUnavailable",
+               defaultValue: "Notes can't insert a divider line here. The text was kept.")
+    }
+    static var dividerInserted: String { String(localized: "edit.dividerInserted", defaultValue: "Inserted · Native divider line") }
+    static var dateInserted: String { String(localized: "edit.dateInserted", defaultValue: "Inserted · Today's date") }
+    static var markerKept: String { String(localized: "edit.markerKept", defaultValue: "Kept the marker as text") }
+
+    // MARK: Permissions
+
+    /// macOS 27 renamed the Accessibility privacy pane.
+    static var accessibilityPermissionName: String {
+        ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27
+            ? String(localized: "permission.accessibility", defaultValue: "Device Control and Data Access")
+            : String(localized: "permission.accessibility.legacy", defaultValue: "Accessibility")
+    }
+    /// macOS 27 renamed the Simplified Chinese Privacy & Security pane.
+    static var privacyPaneName: String {
+        ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27
+            ? String(localized: "permission.privacyPane", defaultValue: "Privacy & Security")
+            : String(localized: "permission.privacyPane.legacy", defaultValue: "Privacy & Security")
+    }
+    static func openSettings(for permission: String) -> String {
+        String(localized: "permission.openSettingsFor", defaultValue: "Open Settings for “\(permission)”")
+    }
+    static var inputMonitoringPermissionName: String {
+        String(localized: "permission.inputMonitoring", defaultValue: "Input Monitoring")
+    }
+    static var permissionGranted: String { String(localized: "permission.granted", defaultValue: "granted") }
+    static var permissionMissing: String { String(localized: "permission.missing", defaultValue: "not granted") }
 
     // MARK: Setup window
 
-    static var setupHeadline: String { String(localized: "setup.headline", defaultValue: "在备忘录里，直接写 Markdown。") }
+    static var setupHeadline: String { String(localized: "setup.headline", defaultValue: "Write Markdown right in Notes.") }
     static var setupIntroduction: String {
-        String(localized: "setup.introduction", defaultValue: "NoteMark 把输入标记转换为备忘录格式。转换后仍是普通 Apple 备忘录，可继续同步、编辑和插入图片。")
+        String(localized: "setup.introduction",
+               defaultValue: "NoteMark turns the Markdown you type into Notes formatting. Your notes stay ordinary Apple Notes: they sync, edit, and hold images as usual.")
     }
-    static var authorizeAccessibility: String { String(localized: "setup.authorizeAccessibility", defaultValue: "授权辅助功能") }
-    static var pauseButton: String { String(localized: "setup.pause", defaultValue: "暂停转换") }
-    static var retryButton: String { String(localized: "setup.retry", defaultValue: "重试连接") }
-    static var resumeButton: String { String(localized: "setup.resume", defaultValue: "恢复转换") }
-    static var waitingForAutomaticStart: String { String(localized: "setup.waitingForAutomaticStart", defaultValue: "等待自动开启") }
-    static var accessibilityGrantedRunning: String {
-        String(localized: "setup.permission.grantedRunning", defaultValue: "✓ 辅助功能已授权 · 转换已开启")
+    static var permissionsHeading: String { String(localized: "setup.permissionsHeading", defaultValue: "Permissions") }
+    static var openPermissionSettings: String { String(localized: "setup.openPermissionSettings", defaultValue: "Open Settings…") }
+    static var permissionsNote: String {
+        String(localized: "setup.permissionsNote",
+               defaultValue: "Turn on NoteMark for both under \(privacyPaneName). Conversion starts automatically once permission is ready. If you just turned on “\(inputMonitoringPermissionName)”, reopen NoteMark.")
     }
-    static var accessibilityGranted: String { String(localized: "setup.permission.granted", defaultValue: "✓ 辅助功能已授权") }
-    static var accessibilityNeededAutomatic: String {
-        String(localized: "setup.permission.neededAutomatic", defaultValue: "需要辅助功能权限 · 授权后自动开启转换")
-    }
-    static var accessibilityNeededPaused: String {
-        String(localized: "setup.permission.neededPaused", defaultValue: "需要辅助功能权限 · 当前已手动暂停")
-    }
-    static var paragraphMarkersHeading: String { String(localized: "setup.paragraphMarkers", defaultValue: "行首标记 → 按空格") }
+    static var pauseButton: String { String(localized: "setup.pause", defaultValue: "Pause") }
+    static var retryButton: String { String(localized: "setup.retry", defaultValue: "Retry") }
+    static var resumeButton: String { String(localized: "setup.resume", defaultValue: "Resume") }
+    static var relaunchButton: String { String(localized: "setup.relaunch", defaultValue: "Reopen NoteMark") }
+    static var settingsButton: String { String(localized: "setup.settings", defaultValue: "Settings…") }
+    static var waitingForAutomaticStart: String { String(localized: "setup.waitingForAutomaticStart", defaultValue: "Waiting to Start") }
+    static var paragraphMarkersHeading: String { String(localized: "setup.paragraphMarkers", defaultValue: "Line-start markers → Space") }
     static var cheatSheet: [(syntax: String, meaning: String)] {
         [
-            ("#  /  ##  /  ###", String(localized: "setup.cheat.headings", defaultValue: "标题 / 小标题 / 次级标题")),
-            (String(localized: "setup.cheat.checklistSyntax", defaultValue: "[]  或  [ ]"),
-             String(localized: "setup.cheat.checklist", defaultValue: "待办清单")),
-            ("-  /  *  /  1.", String(localized: "setup.cheat.lists", defaultValue: "圆点项目符号 / 圆点项目符号 / 编号列表")),
-            (">", String(localized: "setup.cheat.quote", defaultValue: "引用")),
-            ("```", String(localized: "setup.cheat.code", defaultValue: "进入代码块；再次输入退出")),
-            ("/h1  /h2  /h3  /body", String(localized: "setup.cheat.slash", defaultValue: "切换原生段落样式"))
+            ("#  ##  ###", String(localized: "setup.cheat.headings", defaultValue: "Title / Heading / Subheading")),
+            ("-  *", String(localized: "setup.cheat.bullets", defaultValue: "Bulleted list (Settings can make - a dashed list)")),
+            ("1.", String(localized: "setup.cheat.numbered", defaultValue: "Numbered list")),
+            (String(localized: "setup.cheat.checklistSyntax", defaultValue: "[]  or  [ ]"),
+             String(localized: "setup.cheat.checklist", defaultValue: "Checklist")),
+            (">", String(localized: "setup.cheat.quote", defaultValue: "Quote")),
+            ("```", String(localized: "setup.cheat.code", defaultValue: "Start a code block; type it again to leave")),
+            ("---", String(localized: "setup.cheat.divider", defaultValue: "Divider line (macOS 27 or later)"))
         ]
     }
-    static var slashHeading: String { String(localized: "setup.slashHeading", defaultValue: "Slash 命令 → 在空行输入 /") }
-    static var slashExplanation: String {
-        String(localized: "setup.slashExplanation", defaultValue: "光标旁弹出格式菜单。继续输入英文或中文筛选，↑↓ 选择，回车或 Tab 执行，Esc 关闭；也可以点击命令。")
+    static var fullWidthNote: String {
+        String(localized: "setup.fullWidthNote", defaultValue: "Full-width and Chinese punctuation work too: ＃ 》 ＊ ··· 1。")
     }
-    static var inlineHeading: String { String(localized: "setup.inlineHeading", defaultValue: "行内标记 → 写完后按空格或回车") }
+    static var slashHeading: String { String(localized: "setup.slashHeading", defaultValue: "Slash commands → type / on an empty line") }
+    static var slashExplanation: String {
+        String(localized: "setup.slashExplanation",
+               defaultValue: "A format menu opens at the caret. Keep typing to filter in English, Chinese, or pinyin initials (bt finds 标题). Use ↑↓ to choose, Return or Tab to apply, and Esc to close, or click a command. /divider inserts a divider (macOS 27 or later) and /date today's date.")
+    }
+    static var inlineHeading: String { String(localized: "setup.inlineHeading", defaultValue: "Inline markers → Space or Return when finished") }
     static var inlineExamples: String {
-        String(localized: "setup.inlineExamples", defaultValue: "**粗体**   *斜体*   `代码`   ~~删除线~~\n[链接文字](https://example.com)")
+        String(localized: "setup.inlineExamples",
+               defaultValue: "**bold**   *italic*   `code`   ~~strikethrough~~\n[link text](https://example.com)")
     }
     static var codeBlockNote: String {
-        String(localized: "setup.codeBlockNote", defaultValue: "代码块也支持输入 ```swift 后按回车。段落使用备忘录原生字号；行内格式保留光标处的字号。")
+        String(localized: "setup.codeBlockNote",
+               defaultValue: "Code blocks also start with ```swift and Return. Paragraphs use Notes' own sizes; inline formats keep the size at the caret. In Chinese text, inline markers need no spaces around them.")
+    }
+    static var literalTextNote: String {
+        String(localized: "setup.literalTextNote",
+               defaultValue: "To keep a marker as text, type a backslash first: \\# and Space give #. Or press Shift-Space. Press ⌘Z right after a conversion to keep that paragraph as typed.")
     }
     static var betaNote: String {
-        String(localized: "setup.betaNote", defaultValue: "测试版：请先在新笔记里试用。转换可以用 ⌘Z 撤销；输入法组词中的文字会尽量保留。暂不支持嵌套 Markdown 或整篇转换。")
+        String(localized: "setup.betaNote",
+               defaultValue: "Beta: try it in a new note first. Conversions can be undone with ⌘Z, and text an input method is composing is preserved where possible. Nested Markdown and whole-note conversion aren't supported.")
     }
-    static var inputMonitoringSettings: String { String(localized: "setup.inputMonitoringSettings", defaultValue: "输入监控设置…") }
-    static var tryInNotes: String { String(localized: "setup.tryInNotes", defaultValue: "打开备忘录试用") }
+    static var tryInNotes: String { String(localized: "setup.tryInNotes", defaultValue: "Try It in Notes") }
+
+    // MARK: Settings window
+
+    static var settingsTitle: String { String(localized: "settings.title", defaultValue: "NoteMark Settings") }
+    static var settingsGeneral: String { String(localized: "settings.general", defaultValue: "General") }
+    static var settingsLaunchAtLogin: String { String(localized: "settings.launchAtLogin", defaultValue: "Open NoteMark at login") }
+    static var settingsLoginItemNeedsApproval: String {
+        String(localized: "settings.loginItemNeedsApproval", defaultValue: "Allow NoteMark in Login Items.")
+    }
+    static var settingsOpenLoginItems: String { String(localized: "settings.openLoginItems", defaultValue: "Open Login Items…") }
+    static var settingsConversions: String { String(localized: "settings.conversions", defaultValue: "Conversions") }
+    static var settingsHeadings: String { String(localized: "settings.headings", defaultValue: "Headings  # ## ###") }
+    static var settingsLists: String { String(localized: "settings.lists", defaultValue: "Lists  - * 1.") }
+    static var settingsDashList: String { String(localized: "settings.dashList", defaultValue: "- makes a") }
+    static var settingsDashBulleted: String { String(localized: "settings.dashBulleted", defaultValue: "Bulleted list") }
+    static var settingsDashDashed: String { String(localized: "settings.dashDashed", defaultValue: "Dashed list") }
+    static var settingsChecklists: String { String(localized: "settings.checklists", defaultValue: "Checklists  [ ]") }
+    static var settingsQuotes: String { String(localized: "settings.quotes", defaultValue: "Quotes  >") }
+    static var settingsCodeBlocks: String { String(localized: "settings.codeBlocks", defaultValue: "Code blocks  ```") }
+    static var settingsDividers: String { String(localized: "settings.dividers", defaultValue: "Dividers  ---") }
+    static var settingsDividersUnavailable: String {
+        String(localized: "settings.dividersUnavailable", defaultValue: "Dividers need macOS 27 or later.")
+    }
+    static var settingsInlineStyles: String {
+        String(localized: "settings.inlineStyles", defaultValue: "Inline styles  **bold** *italic* `code` ~~strike~~")
+    }
+    static var settingsLinks: String { String(localized: "settings.links", defaultValue: "Links  [text](url)") }
+    static var settingsSlashCommands: String { String(localized: "settings.slashCommands", defaultValue: "Slash commands  /") }
+    static var settingsFullWidthMarkers: String {
+        String(localized: "settings.fullWidthMarkers", defaultValue: "Full-width and Chinese punctuation markers  ＃ 》 ＊")
+    }
+    static var settingsNotesSubstitutions: String {
+        String(localized: "settings.notesSubstitutions", defaultValue: "Apple Notes Substitutions")
+    }
+    static var settingsTurnOffSmartDashes: String {
+        String(localized: "settings.turnOffSmartDashes", defaultValue: "Turn off Smart Dashes  --- becomes —")
+    }
+    static var settingsTurnOffSmartLists: String {
+        String(localized: "settings.turnOffSmartLists", defaultValue: "Turn off Smart Lists  - can stay text")
+    }
+    static var settingsTurnOffSmartTags: String {
+        String(localized: "settings.turnOffSmartTags", defaultValue: "Turn off Smart Tags  #word becomes a tag")
+    }
+    static var settingsNotesSubstitutionsNote: String {
+        String(localized: "settings.notesSubstitutionsNote",
+               defaultValue: "These items in Notes’ Edit > Substitutions menu change Markdown markers as you type, so NoteMark turns them off in Notes. Switching one off here turns it back on in Notes.")
+    }
+    static var settingsCancellationNote: String {
+        String(localized: "settings.cancellationNote",
+               defaultValue: "A formatted paragraph you empty always returns to Body with Delete or Esc.")
+    }
 
     // MARK: Slash menu
 
-    static var slashMenuTitle: String { String(localized: "slash.title", defaultValue: "段落格式") }
-    static func slashSearch(_ query: String) -> String { String(localized: "slash.search", defaultValue: "搜索：\(query)") }
-    static var slashFooter: String { String(localized: "slash.footer", defaultValue: "↑↓ 选择    ↩ / Tab 执行    Esc 关闭") }
-    static var slashNoMatches: String { String(localized: "slash.noMatches", defaultValue: "没有匹配命令，Esc 关闭并保留文字") }
+    static var slashMenuTitle: String { String(localized: "slash.title", defaultValue: "Commands") }
+    static func slashSearch(_ query: String) -> String { String(localized: "slash.search", defaultValue: "Search: \(query)") }
+    static var slashFooter: String { String(localized: "slash.footer", defaultValue: "↑↓ Select    ↩ / Tab Apply    Esc Close") }
+    static var slashNoMatches: String {
+        String(localized: "slash.noMatches", defaultValue: "No matching command. Esc closes and keeps your text.")
+    }
     static func slashCommandAccessibilityLabel(title: String, detail: String, alias: String) -> String {
-        String(localized: "slash.commandLabel", defaultValue: "\(title)，\(detail)，/\(alias)")
+        String(localized: "slash.commandLabel", defaultValue: "\(title), \(detail), /\(alias)")
+    }
+    static func slashTitle(_ command: SlashCommand) -> String {
+        Bundle.main.localizedString(forKey: "slash.\(command.id).title", value: command.englishTitle, table: nil)
+    }
+    static func slashDetail(_ command: SlashCommand) -> String {
+        Bundle.main.localizedString(forKey: "slash.\(command.id).detail", value: command.englishDetail, table: nil)
     }
 }

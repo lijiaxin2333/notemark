@@ -15,6 +15,8 @@ public struct RuntimeReport: Codable, Equatable, Sendable {
     public var trackedParagraphStyle = "none"
     public var lastCancellationAttempt = "none"
     public var cancellationTrace: [CancellationTrace] = []
+    /// Why the last held Space or Return matched no rule. Lengths and flags only.
+    public var lastUnmatchedRule: String?
     /// Per-keystroke paragraph observations are recorded only when enabled.
     public var verboseDiagnostics: Bool
     public var paragraphCancellationReady: Bool?

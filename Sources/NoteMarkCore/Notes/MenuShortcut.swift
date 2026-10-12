@@ -10,6 +10,9 @@ public struct MenuShortcut: Hashable, Sendable {
         self.requiresShift = requiresShift
     }
 
+    /// Edit > Insert Divider Line (macOS 27 and later). Checklist uses Shift-Command-L.
+    public static let insertDivider = MenuShortcut(key: "l", requiresShift: false)
+
     /// Notes' built-in paragraph format commands. NoteMark supplies no font sizes.
     public static func format(_ style: ParagraphStyle) -> MenuShortcut {
         switch style {

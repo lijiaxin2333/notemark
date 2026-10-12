@@ -9,7 +9,7 @@ import NoteMarkCore
 
     /// A slash query is being followed, whether or not the panel is shown.
     private(set) var isTracking = false
-    /// Esc closed the menu; the typed `/query` stays literal text.
+    /// Esc closed the menu, or a backslash kept `/query` as text; it stays literal.
     var isSuppressed = false
 
     private static let debounce = Duration.milliseconds(40)
@@ -81,11 +81,12 @@ import NoteMarkCore
         let snapshot = EditorSnapshot.capture(.observation)
         let update = search.update(beforeCaret: snapshot?.before, windowStart: snapshot?.windowStart ?? 0,
                                     afterCaret: snapshot?.after, selectionLength: snapshot?.selection.length ?? 0,
-                                    isMonospaced: snapshot?.isMonospaced ?? false, isComposing: isComposing)
+                                    isMonospaced: snapshot?.isMonospaced ?? false, isComposing: isComposing,
+                                    rules: session.rules)
         switch update {
         case .wait:
             diagnostics.recordSlash(visible: panel.isVisible, composing: isComposing,
-                                    matchCount: SlashCommand.matching(panel.currentQuery).count)
+                                    matchCount: SlashCommand.matching(panel.currentQuery, rules: session.rules).count)
             scheduleUpdate(after: Self.retryDelay)
         case .show(let query):
             guard let snapshot, let bounds = snapshot.caretBounds() else {
@@ -94,9 +95,9 @@ import NoteMarkCore
             }
             editor = snapshot
             isTracking = true
-            panel.show(query: query, anchor: bounds)
+            panel.show(query: query, anchor: bounds, rules: session.rules)
             diagnostics.recordSlash(visible: panel.isVisible, composing: isComposing,
-                                    matchCount: SlashCommand.matching(query).count)
+                                    matchCount: SlashCommand.matching(query, rules: session.rules).count)
             if isComposing { scheduleUpdate(after: Self.retryDelay) }
         case .hide:
             // Keep query history: deleting back to '/' must not reopen the initial
@@ -129,7 +130,7 @@ import NoteMarkCore
             dismiss()
             return nil
         }
-        let results = SlashCommand.matching(query.query)
+        let results = SlashCommand.matching(query.query, rules: session.rules)
         // Typing immediately before Return may precede the debounced panel update.
         let command = query.query == previousQuery ? results.first { $0.id == requested.id } : results.first
         guard let command else {

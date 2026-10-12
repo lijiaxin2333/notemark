@@ -36,6 +36,8 @@ public struct KeyPress: Equatable, Sendable {
     public var isTab: Bool { code == kVK_Tab }
     public var isEscape: Bool { code == kVK_Escape }
     public var isDeleteBackward: Bool { code == kVK_Delete }
+    /// Any key that deletes text, with or without modifiers.
+    public var isDeletion: Bool { [kVK_Delete, kVK_ForwardDelete].contains(code) || isControlDeletion }
     public var isUpArrow: Bool { code == kVK_UpArrow }
     public var isVerticalArrow: Bool { code == kVK_UpArrow || code == kVK_DownArrow }
 
@@ -46,6 +48,12 @@ public struct KeyPress: Equatable, Sendable {
         if isSpace { return .space }
         return isReturn ? .enter : nil
     }
+
+    /// Command-Z.
+    public var isUndo: Bool { modifiers == .command && letter == "z" }
+
+    /// Shift-Command-Z.
+    public var isRedo: Bool { modifiers == [.command, .shift] && letter == "z" }
 
     /// Control-D, Control-H, and Control-K delete text in Cocoa editors.
     public var isControlDeletion: Bool { modifiers == .control && ["d", "h", "k"].contains(letter) }

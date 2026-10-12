@@ -4,8 +4,9 @@ import XCTest
 final class SlashCommandTests: XCTestCase {
     func testBareSlashShowsAllCommands() {
         XCTAssertEqual(SlashQuery.parse(beforeCaret: "/")?.query, "")
-        XCTAssertEqual(SlashCommand.matching("").count, 10)
-        XCTAssertEqual(Set(SlashCommand.all.map(\.style)).count, 10)
+        XCTAssertEqual(SlashCommand.matching("").count, 12)
+        XCTAssertEqual(Set(SlashCommand.all.map(\.id)).count, 12)
+        XCTAssertEqual(Set(SlashCommand.all.compactMap(\.style)).count, 10)
     }
 
     func testExactAliasRanksFirstAndEnglishIsCaseInsensitive() {
@@ -25,8 +26,9 @@ final class SlashCommandTests: XCTestCase {
 
     func testSearchIncludesEveryVisibleTitleAndDetail() {
         for command in SlashCommand.all {
-            XCTAssertEqual(SlashCommand.matching(command.title).first?.style, command.style, command.title)
-            XCTAssertEqual(SlashCommand.matching(command.detail).first?.style, command.style, command.detail)
+            for term in [command.title, command.detail, command.englishTitle, command.englishDetail] {
+                XCTAssertEqual(SlashCommand.matching(term).first?.id, command.id, term)
+            }
         }
     }
 
@@ -77,9 +79,15 @@ final class SlashCommandTests: XCTestCase {
         XCTAssertEqual(SlashCommand.matching("标题 ").first?.style, .title)
     }
 
-    func testWhitespaceInsideCommandAndFullWidthPathsAreRejected() {
-        for input in ["/ti tle ", "/标 题", "／usr/bin", "／／", "/title\tmore"] {
+    func testRepeatedWhitespaceInsideCommandAndFullWidthPathsAreRejected() {
+        for input in ["/ti  tle ", "/标　题", "／usr/bin", "／／", "/title\tmore"] {
             XCTAssertNil(SlashQuery.parse(beforeCaret: input), input)
+        }
+        // Single spaces separate words of English names; other text matches nothing.
+        XCTAssertEqual(SlashQuery.parse(beforeCaret: "/code block ")?.query, "code block")
+        for query in ["ti tle", "标 题", "hello world"] {
+            XCTAssertEqual(SlashQuery.parse(beforeCaret: "/" + query)?.query, query)
+            XCTAssertTrue(SlashCommand.matching(query).isEmpty, query)
         }
     }
 
@@ -94,7 +102,7 @@ final class SlashCommandTests: XCTestCase {
     }
 
     func testPathURLAndInlineSlashAreNeverCommands() {
-        for input in ["https://example.com", "/usr/bin", "look /h1", " // comment", "//", " /h1", "/hello world", "/\\h1"] {
+        for input in ["https://example.com", "/usr/bin", "look /h1", " // comment", "//", " /h1", "/\\h1"] {
             XCTAssertNil(SlashQuery.parse(beforeCaret: input), input)
         }
     }
@@ -116,10 +124,10 @@ final class SlashCommandTests: XCTestCase {
     func testSelectionWrapsInBothDirections() {
         var selection = SlashSelection()
         selection.move(-1)
-        XCTAssertEqual(selection.selected?.style, .numbered)
+        XCTAssertEqual(selection.selected?.id, "date")
         selection.move(1)
         XCTAssertEqual(selection.selected?.style, .title)
-        selection.move(11)
+        selection.move(13)
         XCTAssertEqual(selection.selected?.style, .heading)
     }
 

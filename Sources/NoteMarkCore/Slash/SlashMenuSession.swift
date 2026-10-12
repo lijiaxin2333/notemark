@@ -39,7 +39,8 @@ public struct SlashMenuSession: Sendable {
     /// `afterCaret` is nil when the paragraph's right boundary is unknown.
     public mutating func update(beforeCaret: String?, windowStart: Int = 0,
                                 afterCaret: String? = "", selectionLength: Int = 0,
-                                isMonospaced: Bool = false, isComposing: Bool = false) -> Update {
+                                isMonospaced: Bool = false, isComposing: Bool = false,
+                                rules: ConversionRules = .default) -> Update {
         guard let beforeCaret else {
             if isComposing { waitingForCommit = true; commitReads = 0; return .wait }
             unavailableReads += 1
@@ -94,7 +95,7 @@ public struct SlashMenuSession: Sendable {
         } else {
             initialSlashPending = false
             emptyMenuOpen = false
-            guard !SlashCommand.matching(query.query).isEmpty else { return hide() }
+            guard !SlashCommand.matching(query.query, rules: rules).isEmpty else { return hide() }
         }
         presentedQuery = query.query
         initialPresentationPending = false

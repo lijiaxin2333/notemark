@@ -15,7 +15,7 @@ final class MarkdownRuleTests: XCTestCase {
         }
     }
     func testPrefixMustBeEntireLine() {
-        for input in ["### 标题", "hello #", " #", "####", "abc-", "1.2", "##\\"] {
+        for input in ["### 标题", "hello #", " #", "#######", "abc-", "1.2", "##\\"] {
             XCTAssertNil(MarkdownRule.plan(beforeCaret: input, trigger: .space), input)
         }
     }
@@ -44,7 +44,10 @@ final class MarkdownRuleTests: XCTestCase {
             XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, trigger: .space, afterCaret: nil))
             XCTAssertNil(MarkdownRule.plan(beforeCaret: marker, windowStart: 10, trigger: .space, afterCaret: "task"))
             XCTAssertNil(MarkdownRule.plan(beforeCaret: "text " + marker, trigger: .space))
-            XCTAssertNil(MarkdownRule.plan(beforeCaret: "\\" + marker, trigger: .space))
+            // A backslash escapes the marker: only the backslash is removed.
+            let escaped = MarkdownRule.plan(beforeCaret: "\\" + marker, trigger: .space)
+            XCTAssertEqual(escaped?.conversion, .unescape)
+            XCTAssertEqual(escaped?.range, NSRange(location: 0, length: 1))
         }
         XCTAssertEqual(MarkdownRule.plan(beforeCaret: "[]", trigger: .space, afterCaret: "task\n\u{fffc}")?.conversion,
                        .paragraph(.checklist))

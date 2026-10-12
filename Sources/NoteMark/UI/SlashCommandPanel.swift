@@ -22,8 +22,9 @@ private final class CommandRow: NSButton {
         self.action = action
         setButtonType(.momentaryChange)
         isBordered = false
-        title = command.title
-        setAccessibilityLabel(L10n.slashCommandAccessibilityLabel(title: command.title, detail: command.detail,
+        title = L10n.slashTitle(command)
+        setAccessibilityLabel(L10n.slashCommandAccessibilityLabel(title: L10n.slashTitle(command),
+                                                                  detail: L10n.slashDetail(command),
                                                                   alias: command.aliases[0]))
     }
 
@@ -37,10 +38,10 @@ private final class CommandRow: NSButton {
         NSColor.labelColor.set()
         NSImage(systemSymbolName: command.symbol, accessibilityDescription: nil)?
             .draw(in: NSRect(x: 14, y: 14, width: 18, height: 18))
-        (command.title as NSString).draw(at: NSPoint(x: 43, y: 7), withAttributes: [
+        (L10n.slashTitle(command) as NSString).draw(at: NSPoint(x: 43, y: 7), withAttributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: isCurrent ? .semibold : .medium), .foregroundColor: NSColor.labelColor
         ])
-        (command.detail as NSString).draw(at: NSPoint(x: 43, y: 25), withAttributes: [
+        (L10n.slashDetail(command) as NSString).draw(at: NSPoint(x: 43, y: 25), withAttributes: [
             .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor
         ])
         let alias = "/" + command.aliases[0]
@@ -79,17 +80,19 @@ private final class CommandRow: NSButton {
     private var panel: CommandPanel?
     private var selection = SlashSelection()
     private var anchor = CGRect.zero
+    private var rules = ConversionRules.default
     private var rows: [CommandRow] = []
     private weak var rowContainer: NSView?
 
     var isVisible: Bool { panel?.isVisible == true }
     var selected: SlashCommand? { selection.selected }
 
-    func show(query: String, anchor: CGRect, present: Bool = true) {
+    func show(query: String, anchor: CGRect, rules: ConversionRules = .default, present: Bool = true) {
         // The visible menu already shows this query at this anchor; rebuilding
         // it would produce the same view and scroll position.
-        let unchanged = isVisible && currentQuery == query && self.anchor == anchor
-        if !isVisible || currentQuery != query { selection.update(query: query) }
+        let unchanged = isVisible && currentQuery == query && self.anchor == anchor && self.rules == rules
+        if !isVisible || currentQuery != query || self.rules != rules { selection.update(query: query, rules: rules) }
+        self.rules = rules
         currentQuery = query
         self.anchor = anchor
         let panel = panel ?? makePanel()

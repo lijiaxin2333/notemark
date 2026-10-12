@@ -15,10 +15,16 @@ fi
 # Unit tests cover the rules in depth; the release binary's --self-check below
 # only confirms that the packaged build runs.
 if [ "${NOTEMARK_SKIP_TESTS:-0}" != 1 ]; then swift test; fi
+swift "$TASK_ROOT/scripts/check-localization.swift" "$TASK_ROOT"
 swift build -c release
 APP="$TASK_ROOT/dist/NoteMark.app"
+rm -rf "$APP/Contents/Resources"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$TASK_ROOT/.build/release/NoteMark" "$APP/Contents/MacOS/NoteMark"
+# Translations and the app icon, without Finder files or extended attributes,
+# which codesign rejects.
+/usr/bin/rsync -a --exclude '.*' "$TASK_ROOT/Packaging/Resources/" "$APP/Contents/Resources/"
+/usr/bin/xattr -cr "$APP"
 sed -e "s/@NOTEMARK_BUNDLE_ID@/$NOTEMARK_BUNDLE_ID/" \
     -e "s/@NOTEMARK_VERSION@/$NOTEMARK_VERSION/" \
     -e "s/@NOTEMARK_BUILD@/$NOTEMARK_BUILD/" \

@@ -69,6 +69,10 @@ import NoteMarkCore
         update { $0.lastCancellationAttempt = outcome }
     }
 
+    func recordUnmatchedRule(_ description: String) {
+        update { $0.lastUnmatchedRule = description }
+    }
+
     func recordCancellationTrace(_ trace: CancellationTrace) {
         update { $0.appendTrace(trace) }
     }

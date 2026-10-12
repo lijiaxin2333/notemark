@@ -33,10 +33,16 @@ import ApplicationServices
         if let path = value(after: "--render-slash", in: arguments) {
             return render("slash menu") { try SlashCommandPanel().renderPreview(to: path) }
         }
+        if let path = value(after: "--render-settings", in: arguments) {
+            return render("settings window") {
+                try SettingsWindowController(preferences: Preferences(defaults: UserDefaults(suiteName: "NoteMarkRenderPreview")!),
+                                             showSetup: {}).renderPreview(to: path)
+            }
+        }
         if let path = value(after: "--render-setup", in: arguments) {
             return render("setup view") {
                 let setup = AppDelegate.makeSetupWindow(status: L10n.waitingForPermission, delegate: nil)
-                setup.update(permission: L10n.accessibilityNeededAutomatic, toggleTitle: L10n.waitingForAutomaticStart)
+                setup.update(accessibility: false, inputMonitoring: false, toggleTitle: L10n.waitingForAutomaticStart)
                 try setup.renderPreview(to: path)
             }
         }

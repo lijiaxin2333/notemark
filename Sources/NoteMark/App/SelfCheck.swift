@@ -68,6 +68,12 @@ enum SelfCheck {
             Check(name: "Chinese code keeps content above the caret",
                   passed: chineseCode?.cancellationPlan(selection: caret(8), intent: .backwardDeletion) == nil),
             Check(name: "unknown boundary is not an empty block", passed: unknownCodeBoundary == nil),
+            Check(name: "inline style inside Chinese text",
+                  passed: MarkdownRule.plan(beforeCaret: "这是**重点**", trigger: .space)?.conversion == .inline(.bold, text: "重点", delimiter: " ")),
+            Check(name: "full-width heading marker", passed: MarkdownRule.plan(beforeCaret: "＃", trigger: .space)?.conversion == .paragraph(.title)),
+            Check(name: "divider marker", passed: MarkdownRule.plan(beforeCaret: "---", trigger: .space)?.conversion == .divider),
+            Check(name: "escaped marker", passed: MarkdownRule.plan(beforeCaret: "\\#", trigger: .space)?.conversion == .unescape),
+            Check(name: "pinyin initials search", passed: SlashCommand.matching("bt").first?.id == "title"),
             Check(name: "terminal empty code cancels at its boundary",
                   passed: terminalEmptyCode?.cancellationPlan(selection: caret(5), intent: .backwardDeletion)?.range == caret(5))
         ]

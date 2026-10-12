@@ -4,6 +4,47 @@ English | [简体中文](VALIDATION.zh-CN.md)
 
 Environment: macOS 27.0.1 (26A434), Apple Silicon, Swift 6.4.
 
+## Product feature batch (0.2.0)
+
+Adds English and Traditional Chinese interfaces, a Settings window (per-rule switches, `-` style, open at login), visible errors near the caret, a permission guide that shows both permissions, an app icon, pinyin-initial Slash search, native dividers (`---`, `/divider`, macOS 27 or later), `/date`, more full-width markers, backslash escapes, and undo that keeps the typed marker. It builds as 0.2.0 (build 25).
+
+Automated checks passed:
+
+- **177 tests, 0 failures**, including product rules, every shown Slash title and description in all three languages finding its own command, rule switches, escapes, dividers, and full-width punctuation.
+- `scripts/check-localization.swift`: 133 keys with matching argument counts in `en`, `zh-Hans`, and `zh-Hant`.
+- Clean debug and release builds with zero warnings; an ad-hoc release bundle passed `--self-check` and `codesign --verify --strict`.
+- Offscreen renders of the guide, Settings, and Slash menu in English, Simplified Chinese, and Traditional Chinese.
+- Five rounds of independent review and verification; confirmed issues were fixed. The rounds around installation fixed an escaped `\/date` or `\/h2` reopening the menu so Return still ran the command, a marker typed again in an emptied escaped paragraph staying text, a Return that commits IME text ending the escape, the English Date description not being typeable, and before that `/date` dropping the user's region, English multi-word Slash names such as `/code block` hiding the menu, `\- [ ]` still becoming a checklist, escaped markers and `-` after Return lacking typing evidence, and a late edit replacing the stop reason in the status.
+
+Live testing then found that `---` became an em dash when typed with a pause, because Notes' Smart Dashes (Edit > Substitutions) replaces it, and that `\#` and Space left `# ` and `\-` and Space became a list through Notes' Smart Lists. Dividers now also accept the em dash when `---` was typed, Space only confirms an escape, and NoteMark turns off Notes' Smart Dashes and Smart Lists (Settings can keep or restore them). A further review made Notes menu reads time out quickly, kept escaped and undone paragraphs literal across app switches, and made ⌘Z keep paragraph markers literal until Return, a click, a deletion, or leaving the paragraph.
+
+On 2026-10-12, 0.2.0 was installed over 0.1.23 at `/Applications/NoteMark.app` with the update script. Accessibility and Input Monitoring stayed granted and conversion restarted automatically.
+
+Live checks still needed in Apple Notes:
+
+| Check | Expected |
+| --- | --- |
+| First launch with no permissions, then grant both | Guide lists both permissions with live status; after granting, it does not reopen on later launches |
+| Switch macOS to English, then Traditional Chinese, and relaunch | Menu, guide, Settings, Slash menu, and errors follow the language; `bt` still finds Heading |
+| Turn off each rule in Settings | That syntax stays plain text; others still convert; Slash menu hides when Slash commands are off |
+| Set `-` to make a dashed list | `-` + Space makes a dashed list; `*` still makes bullets |
+| Turn on Open at login, log out and in | NoteMark starts; the switch reflects System Settings changes |
+| Type `---`, `***`, `___`, or `——` + Space or Return on an empty line; `/divider` | Native divider line; caret continues below |
+| `/date` | Today's date in the system language and region |
+| In English, type `/code block`, `/bulleted list`, or `/numbered list` and press Return | Menu stays open while typing; the whole `/…` text becomes that style |
+| On an empty line type `\-` and Space | A real `-` with no space after it, not a list |
+| On an empty line type `\/date`, Space, then Return; repeat with a Chinese IME committing letters with Return | `/date` stays text; no menu opens; Return starts a new line |
+| Type `\#`, Space, delete back to an empty line, then `#` and Space | The second `#` becomes a heading |
+| `/bt`, `/xm`, `/fgx` | Heading, list, and divider commands found by pinyin initials |
+| `＃ `, `＞ `, `》 `, `－ `, `１。 ` | Same conversion as the ASCII markers |
+| `\#` + Space on an empty line, then `你好` | Backslash removed and Space only confirms: `#你好` as text, not converted; the menu bar tooltip says the marker was kept |
+| Type `---`, wait two seconds, then Space or Return | The same native divider as `/divider`, not an em dash (Smart Dashes replaces `---` with `—` after a pause) |
+| With NoteMark running, open Notes' Edit > Substitutions | Smart Dashes and Smart Lists are off; Smart Tags is unchanged. Turning a switch off in NoteMark Settings turns that item back on in Notes |
+| Convert `# `, then Command-Z, then Space again in the same paragraph | Undo restores `# `; the paragraph is not converted again |
+| Quit Notes or remove Accessibility during conversion | A short notice near the caret or the guide appears; menu bar icon shows the state |
+| Command-, / W / M / C / A in the guide | Settings, close, minimize, copy, and select all work |
+| VoiceOver on the guide and menu bar icon | Each permission button names its permission; icon reads the state |
+
 ## Architecture refactor (0.1.23)
 
 The code was restructured without intended product changes: pure rules and key classification moved into `NoteMarkCore`, the app was split into input, Accessibility, conversion, diagnostics, and UI components, and everything builds in Swift 6 language mode with main-actor isolation. It builds as 0.1.23 (build 24).

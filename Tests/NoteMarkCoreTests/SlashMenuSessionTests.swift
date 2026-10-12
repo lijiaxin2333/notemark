@@ -34,6 +34,26 @@ final class SlashMenuSessionTests: XCTestCase {
         }
     }
 
+    func testEnglishNamesWithSpacesStayVisibleWhileTyped() {
+        for (name, id) in [("code block", "monostyled"), ("bulleted list", "bullets"),
+                           ("dashed list", "dashed"), ("numbered list", "numbered")] {
+            var session = SlashMenuSession()
+            session.begin()
+            XCTAssertEqual(session.update(beforeCaret: "/"), .show(""))
+            for length in 1...name.count {
+                let typed = String(name.prefix(length))
+                let expected = typed.trimmingCharacters(in: .whitespaces)
+                XCTAssertEqual(session.update(beforeCaret: "/" + typed), .show(expected), typed)
+                XCTAssertTrue(SlashCommand.matching(expected).contains { $0.id == id }, typed)
+            }
+            XCTAssertEqual(SlashCommand.matching(name).first?.id, id, name)
+        }
+        var session = SlashMenuSession()
+        session.begin()
+        XCTAssertEqual(session.update(beforeCaret: "/code"), .show("code"))
+        XCTAssertEqual(session.update(beforeCaret: "/code is fun"), .hide)
+    }
+
     func testFastTypingAndBackspacingBeforeFirstRefreshDoesNotShowEmptyMenu() {
         var session = SlashMenuSession()
         session.begin()
