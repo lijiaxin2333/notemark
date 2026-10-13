@@ -29,9 +29,11 @@ enum ConversionState {
 }
 
 /// The menu bar item and its menu.
-@MainActor final class StatusMenuController: NSObject {
+@MainActor final class StatusMenuController: NSObject, NSMenuDelegate {
     struct Actions {
         var toggleConversion: () -> Void
+        var showsInsertedImagesSmall: () -> Bool
+        var toggleInsertedImagesSmall: () -> Void
         var showSetup: () -> Void
         var showSettings: () -> Void
         var openNotes: () -> Void
@@ -41,6 +43,7 @@ enum ConversionState {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let toggleItem = NSMenuItem(title: L10n.enableConversion, action: #selector(toggleConversion), keyEquivalent: "")
+    private let smallImagesItem = NSMenuItem(title: L10n.smallImagesMenuItem, action: #selector(toggleInsertedImagesSmall), keyEquivalent: "")
     private let actions: Actions
     private var state: ConversionState?
 
@@ -56,11 +59,13 @@ enum ConversionState {
         menu.addItem(statusLine)
         menu.addItem(.separator())
         menu.addItem(item(toggleItem))
+        menu.addItem(item(smallImagesItem))
         menu.addItem(item(NSMenuItem(title: L10n.settingsMenuItem, action: #selector(showSettings), keyEquivalent: ",")))
         menu.addItem(item(NSMenuItem(title: L10n.helpAndPermissions, action: #selector(showSetup), keyEquivalent: "")))
         menu.addItem(item(NSMenuItem(title: L10n.openNotes, action: #selector(openNotes), keyEquivalent: "")))
         menu.addItem(.separator())
         menu.addItem(item(NSMenuItem(title: L10n.quit, action: #selector(quit), keyEquivalent: "q")))
+        menu.delegate = self
         statusItem.menu = menu
         update(state: .unavailable, status: "", wantsConversion: true)
     }
@@ -80,12 +85,18 @@ enum ConversionState {
         statusItem.button?.appearsDisabled = state == .pausedByUser
     }
 
+    /// The setting can also change in Settings, so read it as the menu opens.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        smallImagesItem.state = actions.showsInsertedImagesSmall() ? .on : .off
+    }
+
     private func item(_ item: NSMenuItem) -> NSMenuItem {
         item.target = self
         return item
     }
 
     @objc private func toggleConversion() { actions.toggleConversion() }
+    @objc private func toggleInsertedImagesSmall() { actions.toggleInsertedImagesSmall() }
     @objc private func showSetup() { actions.showSetup() }
     @objc private func showSettings() { actions.showSettings() }
     @objc private func openNotes() { actions.openNotes() }

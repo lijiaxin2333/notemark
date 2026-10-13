@@ -51,6 +51,8 @@ public struct KeyPress: Equatable, Sendable {
 
     /// Command-Z.
     public var isUndo: Bool { modifiers == .command && letter == "z" }
+    /// Command-V, which can paste images; other paste variants paste plain text.
+    public var isPaste: Bool { modifiers == .command && letter == "v" }
 
     /// Shift-Command-Z.
     public var isRedo: Bool { modifiers == [.command, .shift] && letter == "z" }

@@ -10,6 +10,7 @@ import ServiceManagement
         static let onboardingCompleted = "OnboardingCompleted"
         static let notesSubstitutionsOff = "NotesSubstitutionsOff"
         static let notesSubstitutionsTurnedOff = "NotesSubstitutionsTurnedOffByNoteMark"
+        static let showsInsertedImagesSmall = "ShowsInsertedImagesSmall"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -36,6 +37,11 @@ import ServiceManagement
         didSet { save(notesSubstitutionsTurnedOff, forKey: Key.notesSubstitutionsTurnedOff) }
     }
 
+    /// Images pasted or inserted into a note are set to Notes' small size. Off by default.
+    var showsInsertedImagesSmall: Bool {
+        didSet { defaults.set(showsInsertedImagesSmall, forKey: Key.showsInsertedImagesSmall) }
+    }
+
     /// Called after the user changes which Notes substitutions stay off.
     @ObservationIgnored var onNotesSubstitutionsChange: (() -> Void)?
 
@@ -45,6 +51,7 @@ import ServiceManagement
         onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
         notesSubstitutionsOff = Self.substitutions(defaults, Key.notesSubstitutionsOff) ?? NotesSubstitution.turnedOffByDefault
         notesSubstitutionsTurnedOff = Self.substitutions(defaults, Key.notesSubstitutionsTurnedOff) ?? []
+        showsInsertedImagesSmall = defaults.bool(forKey: Key.showsInsertedImagesSmall)
     }
 
     private static func substitutions(_ defaults: UserDefaults, _ key: String) -> Set<NotesSubstitution>? {

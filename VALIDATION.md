@@ -39,6 +39,7 @@ Live checks still needed in Apple Notes:
 | `＃ `, `＞ `, `》 `, `－ `, `１。 ` | Same conversion as the ASCII markers |
 | `\#` + Space on an empty line, then `你好` | Backslash removed and Space only confirms: `#你好` as text, not converted; the menu bar tooltip says the marker was kept |
 | Type `---`, wait two seconds, then Space or Return | The same native divider as `/divider`, not an em dash (Smart Dashes replaces `---` with `—` after a pause) |
+| Turn on Show New Images Small in the menu bar menu, then paste an image with Command-V, drag one in, and use Notes' Insert menu | Each new image shows small; turning the item off stops it; typing, Return in a checklist, and converting `---` do not change image sizes |
 | With NoteMark running, open Notes' Edit > Substitutions | Smart Dashes and Smart Lists are off; Smart Tags is unchanged. Turning a switch off in NoteMark Settings turns that item back on in Notes |
 | Convert `# `, then Command-Z, then Space again in the same paragraph | Undo restores `# `; the paragraph is not converted again |
 | Quit Notes or remove Accessibility during conversion | A short notice near the caret or the guide appears; menu bar icon shows the state |

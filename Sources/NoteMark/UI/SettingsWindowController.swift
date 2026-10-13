@@ -21,12 +21,21 @@ import SwiftUI
 
 /// The Settings window: launch at login and which conversions run.
 @MainActor final class SettingsWindowController {
+    /// Room left for the title bar and the Dock on small screens.
+    private static let screenMargin: CGFloat = 80
+
     let window: NSWindow
     private let loginItem = LoginItemStatus()
 
     init(preferences: Preferences, showSetup: @escaping () -> Void) {
         let view = SettingsView(preferences: preferences, loginItem: loginItem, showSetup: showSetup)
-        window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        let hosting = NSHostingController(rootView: view)
+        // The window keeps the size set below; the form scrolls when it is shorter than its content.
+        hosting.sizingOptions = []
+        window = NSWindow(contentViewController: hosting)
+        let content = NSHostingView(rootView: view.fixedSize(horizontal: false, vertical: true)).fittingSize
+        let available = (NSScreen.main?.visibleFrame.height ?? content.height) - Self.screenMargin
+        window.setContentSize(NSSize(width: content.width, height: min(content.height, available)))
         window.title = L10n.settingsTitle
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
@@ -92,6 +101,15 @@ private struct SettingsView: View {
                 Toggle(L10n.settingsFullWidthMarkers, isOn: $preferences.rules.fullWidthMarkers)
             }
             Section {
+                Toggle(L10n.settingsSmallImages, isOn: $preferences.showsInsertedImagesSmall)
+            } header: {
+                Text(L10n.settingsImages)
+            } footer: {
+                Text(L10n.settingsSmallImagesNote).font(.caption).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Section {
                 Toggle(L10n.settingsTurnOffSmartDashes, isOn: keepsOff(.smartDashes))
                 Toggle(L10n.settingsTurnOffSmartLists, isOn: keepsOff(.smartLists))
                 Toggle(L10n.settingsTurnOffSmartTags, isOn: keepsOff(.smartTags))
@@ -112,7 +130,6 @@ private struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480)
-        .fixedSize(horizontal: false, vertical: true)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             loginItem.refresh()
         }

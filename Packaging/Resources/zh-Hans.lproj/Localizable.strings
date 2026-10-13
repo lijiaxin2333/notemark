@@ -109,6 +109,10 @@
 "settings.links" = "链接  [文字](url)";
 "settings.slashCommands" = "Slash 命令  /";
 "settings.fullWidthMarkers" = "全角和中文标点标记  ＃ 》 ＊";
+"menu.smallImages" = "新插入的图片显示为小尺寸";
+"settings.images" = "图片";
+"settings.smallImages" = "粘贴或插入的图片显示为小尺寸";
+"settings.smallImagesNote" = "粘贴或插入图片后，NoteMark 会在备忘录中执行“显示 > 附件视图 > 全部设为小尺寸”。它会作用于这条备忘录中的所有附件，包括你调大过的。";
 "settings.notesSubstitutions" = "备忘录的自动替换";
 "settings.turnOffSmartDashes" = "关闭智能破折号  --- 会变成 —";
 "settings.turnOffSmartLists" = "关闭智能列表  让 - 可以保留为文本";

@@ -214,6 +214,19 @@ enum L10n {
     static var settingsFullWidthMarkers: String {
         String(localized: "settings.fullWidthMarkers", defaultValue: "Full-width and Chinese punctuation markers  ＃ 》 ＊")
     }
+    static var smallImagesMenuItem: String {
+        String(localized: "menu.smallImages", defaultValue: "Show New Images Small")
+    }
+    static var settingsImages: String {
+        String(localized: "settings.images", defaultValue: "Images")
+    }
+    static var settingsSmallImages: String {
+        String(localized: "settings.smallImages", defaultValue: "Show pasted or inserted images small")
+    }
+    static var settingsSmallImagesNote: String {
+        String(localized: "settings.smallImagesNote",
+               defaultValue: "After you paste or insert an image, NoteMark chooses View > Attachment View > Set All to Small in Notes. It applies to every attachment in that note, including ones you made larger.")
+    }
     static var settingsNotesSubstitutions: String {
         String(localized: "settings.notesSubstitutions", defaultValue: "Apple Notes Substitutions")
     }

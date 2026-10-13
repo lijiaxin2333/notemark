@@ -25,6 +25,8 @@ import NoteMarkCore
         NSApp.mainMenu = makeMainMenu()
         statusMenu = StatusMenuController(actions: .init(
             toggleConversion: { [weak self] in self?.toggleConversion() },
+            showsInsertedImagesSmall: { [weak self] in self?.preferences.showsInsertedImagesSmall ?? false },
+            toggleInsertedImagesSmall: { [weak self] in self?.preferences.showsInsertedImagesSmall.toggle() },
             showSetup: { [weak self] in self?.showSetup() },
             showSettings: { [weak self] in self?.showSettings() },
             openNotes: { NotesApp.open() },

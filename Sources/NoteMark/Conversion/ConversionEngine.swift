@@ -75,6 +75,7 @@ import NoteMarkCore
     private let slash: SlashMenuController
     private let editor: NotesEditApplier
     private let substitutions: NotesSubstitutionSwitcher
+    private let imageShrinker: InsertedImageShrinker
 
     init(diagnostics: DiagnosticsReporter, preferences: Preferences) {
         session = ConversionSession(preferences: preferences)
@@ -84,6 +85,7 @@ import NoteMarkCore
         editor = NotesEditApplier(session: session, tracker: tracker, diagnostics: diagnostics,
                                   keyboardLayout: keyboardLayout)
         substitutions = NotesSubstitutionSwitcher(preferences: preferences)
+        imageShrinker = InsertedImageShrinker(preferences: preferences)
         slash.onChoose = { [weak self] command in
             self?.executeSlash(command, original: nil, composing: ComposingProbe())
         }
@@ -127,6 +129,7 @@ import NoteMarkCore
         workspaceObserver = nil
         tap.remove()
         session.isRunning = false
+        imageShrinker.disarm()
         lastConversion = nil
         undoneParagraph = nil
         endEscapedParagraph()
@@ -170,6 +173,7 @@ import NoteMarkCore
         guard session.canEdit, NotesApp.isFrontmost else { return }
         bindFocusedEditor()
         if !ComposingProbe().isComposing { tracker.refresh() }
+        imageShrinker.editorChanged()
         // IME commits and pasted text need not contain a usable raw slash key event.
         // Observe the editor so committed Chinese search resumes without another key.
         guard session.rules.slashCommands, !slash.isSuppressed else { return }
@@ -239,6 +243,10 @@ import NoteMarkCore
                 slash.dismiss()
             }
             return .pass
+        case .leftMouseUp:
+            // A drop, the Insert menu, or Paste in a menu may insert an image next.
+            imageShrinker.arm()
+            return .pass
         case .keyDown:
             return handleKeyDown(keyPress(from: event), event, composing)
         default:
@@ -256,6 +264,7 @@ import NoteMarkCore
 
     /// Steps run in a fixed order; each either decides the event or falls through.
     private func handleKeyDown(_ key: KeyPress, _ event: CGEvent, _ composing: ComposingProbe) -> EventDisposition {
+        if key.isPaste { imageShrinker.arm() } else { imageShrinker.typingStarted() }
         if running, slash.isTracking || slash.isPanelVisible, composing.isComposing {
             // Before modifiers, repeat filtering, and menu navigation: every
             // candidate key (including Shift/Option and Esc) belongs to the IME.
